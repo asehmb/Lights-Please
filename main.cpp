@@ -1,7 +1,12 @@
 #include <iostream>
-#include "src/vector.hpp"
+#include <SDL.h>
+#include "vector/vector.hpp"
+#include "platform.h"
+#include "logger.h"
+
 
 int main() {
+    // Simple vector demos (keeps previous behavior)
     Vector a(1.0, 2.0, 3.0);
     Vector b(4.0, 5.0, 6.0);
 
@@ -24,6 +29,24 @@ int main() {
 
     c = a.normalize();
     std::cout << "normalize(a) = (" << c.x << ", " << c.y << ", " << c.z << ")\n";
+
+    platform::init();
+
+    while (!platform::should_close()) {
+        platform::poll_events();
+
+        if (platform::key_down(Key::Escape)) {
+            break;
+        }
+
+        if (platform::mouse_button_down(SDL_BUTTON_LEFT)) {
+            Vec2 pos = platform::mouse_position();
+            LOG_INFO("Left mouse button is down at position (" + std::to_string(pos.x) + ", " + std::to_string(pos.y) + ")");
+        }
+        // Game update and rendering logic would go here
+
+        SDL_Delay(16); // Simulate ~60 FPS
+    }
 
     return 0;
 }

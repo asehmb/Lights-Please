@@ -1,3 +1,6 @@
 /target
 lights-please
 *.o
+build/
+.idea/
+.DS_Store
