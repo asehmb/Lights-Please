@@ -1,8 +1,8 @@
 #include <iostream>
 #include <SDL.h>
-#include "vector/vector.hpp"
-#include "platform.h"
-#include "logger.h"
+#include "engine/vector/vector.hpp"
+#include "engine/platform.h"
+#include "engine/logger.h"
 
 
 int main() {

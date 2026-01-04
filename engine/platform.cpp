@@ -1,6 +1,5 @@
 #include "platform.h"
 #include <SDL.h>
-#include <vector>
 
 namespace platform {
 

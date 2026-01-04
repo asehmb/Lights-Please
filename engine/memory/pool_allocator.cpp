@@ -1,7 +1,5 @@
-#include "mem_allocator.h"
-#include <cstdlib>
+#include "pool_allocator.h"
 #include <cstddef>
-
 
 // Pool Allocator Implementation
 
@@ -40,31 +38,4 @@ void PoolAllocator::deallocate(void* node_data){
     Node* node = reinterpret_cast<Node*>(node_data);
     node->next = head; // link the freed block to the front of the free list
     head = node;       // update head to the freed block
-}
-
-
-// Linear Allocator Implementation
-
-
-LinearAllocator::LinearAllocator(size_t size){
-    size_ = size;
-    offset_ = 0;
-    memory_ = new std::byte[size];
-}
-
-LinearAllocator::~LinearAllocator(){
-    delete[] memory_;
-}
-
-void* LinearAllocator::allocate(size_t size){
-    if (offset_ + size > size_) {
-        return nullptr; // not enough memory
-    }
-    void* ptr = memory_ + offset_;
-    offset_ += size;
-    return ptr;
-}
-
-void LinearAllocator::reset(){
-    offset_ = 0;
 }
