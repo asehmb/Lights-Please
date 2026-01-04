@@ -12,8 +12,10 @@ find_package(SDL2 REQUIRED)
 find_package(Vulkan REQUIRED)
 
 add_executable(Lights_Please main.cpp engine/vector/vector.cpp engine/platform.cpp
+    engine/thread_pool.cpp
     engine/memory/pool_allocator.cpp
     engine/memory/linear_allocator.cpp
+    engine/engine.cpp
 )
 target_link_libraries(Lights_Please PRIVATE 
     SDL2::SDL2 
