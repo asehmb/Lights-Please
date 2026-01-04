@@ -4,3 +4,5 @@ lights-please
 build/
 .idea/
 .DS_Store
+
+.cache
