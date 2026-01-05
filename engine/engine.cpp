@@ -6,9 +6,18 @@
 void Engine::initialize() {
     is_running = true;
     platform::init();
+
+    // create thread pool with number of hardware threads
+    unsigned int thread_count = std::thread::hardware_concurrency();
+    thread_pool = std::make_unique<ThreadPool>(thread_count);
+
+
+    // create renderer from platform window
+    renderer = std::make_unique<Renderer>(platform::get_window_ptr());
 }
 
-void Engine::shutdown() {
+Engine::~Engine() {
+    // Cleanup if necessary
     is_running = false;
 }
 void Engine::run() {
@@ -36,7 +45,6 @@ void Engine::run() {
             accumulator -= dt;
         }
 
-        // 3. Render
         // 'alpha' is how far we are between the current and next physics state
         // This is used for "interpolation" to make motion look smooth
         float alpha = accumulator / dt;

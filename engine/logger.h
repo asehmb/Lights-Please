@@ -3,6 +3,8 @@
 #include <format>
 #include <iostream>
 #include <mutex>
+#include <type_traits>
+#include <utility>
 
 enum class LogLevel { Info, Warning, Error };
 
@@ -19,6 +21,24 @@ namespace logger {
         if (level == LogLevel::Error)   prefix = "[ERR ]";
 
         // Lock only during the actual output
+        std::lock_guard<std::mutex> lock(log_mutex);
+        std::cout << prefix << " " << message << std::endl;
+    }
+
+    // Convenience overload: allow calling logger::log(level, value) with a
+    // non-format value (e.g., an int or a custom type). This is disabled when
+    // the single argument is convertible to std::string_view so string literals
+    // and format-strings still select the format-based overload above.
+    template <typename T>
+    std::enable_if_t<!std::is_convertible_v<T, std::string_view>, void>
+    log(LogLevel level, T&& value) {
+        // Use std::format to convert the value to a string using {}.
+        std::string message = std::format("{}", std::forward<T>(value));
+
+        const char* prefix = "[INFO]";
+        if (level == LogLevel::Warning) prefix = "[WARN]";
+        if (level == LogLevel::Error)   prefix = "[ERR ]";
+
         std::lock_guard<std::mutex> lock(log_mutex);
         std::cout << prefix << " " << message << std::endl;
     }

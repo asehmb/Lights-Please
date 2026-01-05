@@ -1,11 +1,13 @@
 #pragma once
 #include "thread_pool.h"
+#include "renderer.h"
+
 
 class Engine {
 public:
     void run();
     void initialize();
-    void shutdown();
+    ~Engine();
 private:
     void process_input();
     void update(float fixed_dt); // Fixed logic (Physics, AI)
@@ -14,4 +16,5 @@ private:
     bool is_running = false;
     const float dt = 1.0f / 60.0f; // Target 60Hz for logic
     std::unique_ptr<ThreadPool> thread_pool;
+    std::unique_ptr<Renderer> renderer;
 };
