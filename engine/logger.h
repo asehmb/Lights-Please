@@ -1,4 +1,5 @@
 #pragma once
+#include "config.h"
 #include <string>
 #include <format>
 #include <iostream>
@@ -44,6 +45,15 @@ namespace logger {
     }
 }
 
-#define LOG_INFO(fmt, ...)  logger::log(LogLevel::Info, fmt, ##__VA_ARGS__)
-#define LOG_WARN(fmt, ...)  logger::log(LogLevel::Warning, fmt, ##__VA_ARGS__)
-#define LOG_ERR(fmt, ...)   logger::log(LogLevel::Error, fmt, ##__VA_ARGS__)
+// Define logging macros that become no-ops when NDEBUG (or project disable)
+// is active. Use LIGHTS_PLEASE_LOG_ENABLED for clarity.
+#if LIGHTS_PLEASE_LOG_ENABLED
+#  define LOG_INFO(fmt, ...)  logger::log(LogLevel::Info, fmt, ##__VA_ARGS__)
+#  define LOG_WARN(fmt, ...)  logger::log(LogLevel::Warning, fmt, ##__VA_ARGS__)
+#  define LOG_ERR(fmt, ...)   logger::log(LogLevel::Error, fmt, ##__VA_ARGS__)
+#else
+// Expand to nothing but keep expression safety by using (void)0
+#  define LOG_INFO(fmt, ...)  (void)0
+#  define LOG_WARN(fmt, ...)  (void)0
+#  define LOG_ERR(fmt, ...)   (void)0
+#endif
