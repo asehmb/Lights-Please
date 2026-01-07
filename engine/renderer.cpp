@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
+#include <vulkan/vulkan_beta.h>
 #include <vector>
 #include "logger.h"
 #include <set>
@@ -39,13 +40,13 @@ Renderer::~Renderer()
 			debugMessenger = VK_NULL_HANDLE;
 		}
 	}
-	if (instance != VK_NULL_HANDLE) {
-		vkDestroyInstance(instance, nullptr);
-		instance = VK_NULL_HANDLE;
-	}
 	if (device != VK_NULL_HANDLE) {
 		vkDestroyDevice(device, nullptr);
 		device = VK_NULL_HANDLE;
+	}
+	if (instance != VK_NULL_HANDLE) {
+		vkDestroyInstance(instance, nullptr);
+		instance = VK_NULL_HANDLE;
 	}
 
 }
@@ -60,18 +61,21 @@ bool Renderer::initialize(SDL_Window* window)
     std::vector<const char*> extensions(extensionCount);
     SDL_Vulkan_GetInstanceExtensions(window, &extensionCount, extensions.data());
 
-	//  Vulkan SDKs on macOS may require the portability enumeration extension.
+	// needed for macos/MoltenVK
 	extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
-    
-    // (Optional) Add Debug Utils if you are in Debug mode
-    // extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+
+#ifndef NDEBUG
+    // Add Debug Utils if in Debug mode
+    extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+#endif
+
 	LOG_INFO("Extensions count: {}", static_cast<unsigned>(extensions.size()));
 	LOG_INFO("Extensions:");
 	for (const auto& ext : extensions) {
 		LOG_INFO("  {}", ext);
 	}
 
-	// Determine whether to enable validation layers (only in debug builds)
+	// Determine whether to enable Validation layers (only in debug builds)
 #if LIGHTS_PLEASE_LOG_ENABLED
 	enableValidationLayers = true;
 #else
@@ -83,7 +87,16 @@ bool Renderer::initialize(SDL_Window* window)
 		validationLayers = { "VK_LAYER_KHRONOS_validation" };
 		// ensure debug utils extension is requested
 		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+		extensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 	}
+
+	VkApplicationInfo appInfo{};
+	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+	appInfo.pApplicationName = "Lights Please";
+	appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+	appInfo.pEngineName = "No Engine";
+	appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+	appInfo.apiVersion = VK_API_VERSION_1_0;
 
 	// fill out the Instance Info
     VkInstanceCreateInfo createInfo{};
@@ -142,6 +155,13 @@ bool Renderer::initialize(SDL_Window* window)
 			LOG_WARN("vkCreateDebugUtilsMessengerEXT not found");
 		}
 	}
+
+	// Create Vulkan surface from SDL window
+	if(!SDL_Vulkan_CreateSurface(window, instance, &surface)){
+		LOG_ERR("Failed to create Vulkan surface from SDL window");
+		return false;
+	}
+
     return instance != VK_NULL_HANDLE;
 }
 
@@ -222,15 +242,81 @@ void Renderer::initLogicalDevice() {
 		queueCreateInfos.push_back(queueCreateInfo);
 	}
 
-	VkPhysicalDeviceFeatures deviceFeatures{};
 
 	VkDeviceCreateInfo createInfo{};
+
+	std::vector<const char*> extensions;
+	if (enableValidationLayers && !validationLayers.empty()) {
+		LOG_INFO("Enabling validation layers for logical device");
+		extensions.push_back(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
+
+	}
+
+
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 	createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
 	createInfo.pQueueCreateInfos = queueCreateInfos.data();
-	createInfo.pEnabledFeatures = &deviceFeatures;
+	createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+	createInfo.ppEnabledExtensionNames = extensions.data();
 
-	if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS) {
+
+	if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) == VK_SUCCESS) {
+		LOG_INFO("Logical device created successfully");
+	} else {
 		LOG_ERR("Failed to create logical device!");
 	}
+}
+
+VkPresentModeKHR Renderer::chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes) {
+	// Prefer MAILBOX if available, otherwise use FIFO which is guaranteed to be available
+	for (const auto& availablePresentMode : availablePresentModes) {
+		if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
+			LOG_INFO("Selected VK_PRESENT_MODE_MAILBOX_KHR for swapchain");
+			return availablePresentMode;
+		}
+	}
+	LOG_INFO("Selected VK_PRESENT_MODE_FIFO_KHR for swapchain");
+	return VK_PRESENT_MODE_FIFO_KHR;
+}
+VkSurfaceFormatKHR Renderer::chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats) {
+	// Prefer SRGB format with UNORM color space
+	for (const auto& availableFormat : availableFormats) {
+		if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB &&
+			availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+			return availableFormat;
+		}
+	}
+	// Otherwise return the first available format
+	return availableFormats[0];
+}
+
+void Renderer::createSwapchain() {
+	auto surfaceCapabilities = VkSurfaceCapabilitiesKHR{};
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &surfaceCapabilities);
+
+	int imageCount = surfaceCapabilities.minImageCount + 1;
+	if (surfaceCapabilities.maxImageCount > 0 && imageCount > surfaceCapabilities.maxImageCount) {
+		imageCount = surfaceCapabilities.maxImageCount;
+	}
+
+	VkSwapchainCreateInfoKHR swapchainCreateInfo{};
+	swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+	swapchainCreateInfo.surface = surface;
+	swapchainCreateInfo.minImageCount = imageCount;
+	swapchainCreateInfo.imageFormat = swapchainImageFormat;
+	swapchainCreateInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR; // Placeholder
+	swapchainCreateInfo.imageExtent = surfaceCapabilities.currentExtent;
+	swapchainCreateInfo.imageArrayLayers = 1;
+	swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+	std::vector<VkPresentModeKHR> availablePresentModes;
+	uint32_t presentModeCount = 0;
+	vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, nullptr);
+	availablePresentModes.resize(presentModeCount);
+	vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, availablePresentModes.data());
+
+	swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    swapchainCreateInfo.preTransform = surfaceCapabilities.currentTransform;
+    swapchainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+	swapchainCreateInfo.presentMode = chooseSwapPresentMode(availablePresentModes);
 }
