@@ -23,12 +23,17 @@ Renderer::Renderer(SDL_Window* window)
 	if (instance != VK_NULL_HANDLE && surface != VK_NULL_HANDLE) {
 		if (pickPhysicalDevice()) {
 			initLogicalDevice();
+			createSwapchain();
 		}
 	}
 }
 
 Renderer::~Renderer()
 {
+	if (swapchain != VK_NULL_HANDLE) {
+		vkDestroySwapchainKHR(device, swapchain, nullptr);
+		swapchain = VK_NULL_HANDLE;
+	}
 	if (surface != VK_NULL_HANDLE) {
 		vkDestroySurfaceKHR(instance, surface, nullptr);
 		surface = VK_NULL_HANDLE;
@@ -44,6 +49,7 @@ Renderer::~Renderer()
 		vkDestroyDevice(device, nullptr);
 		device = VK_NULL_HANDLE;
 	}
+
 	if (instance != VK_NULL_HANDLE) {
 		vkDestroyInstance(instance, nullptr);
 		instance = VK_NULL_HANDLE;
@@ -251,6 +257,7 @@ void Renderer::initLogicalDevice() {
 		extensions.push_back(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
 
 	}
+	extensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 
 
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -289,25 +296,65 @@ VkSurfaceFormatKHR Renderer::chooseSwapSurfaceFormat(const std::vector<VkSurface
 	// Otherwise return the first available format
 	return availableFormats[0];
 }
+VkExtent2D Renderer::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) {
+	// If currentExtent is not set to the special value, return it
+	if (capabilities.currentExtent.width != UINT32_MAX) {
+		return capabilities.currentExtent;
+	} else {
+		// Otherwise, we can set the extent to what we want (clamped to allowed extents)
+		VkExtent2D actualExtent = {800, 600}; // Placeholder for desired width/height
 
-void Renderer::createSwapchain() {
-	auto surfaceCapabilities = VkSurfaceCapabilitiesKHR{};
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &surfaceCapabilities);
+		actualExtent.width = std::max(capabilities.minImageExtent.width,
+			std::min(capabilities.maxImageExtent.width, actualExtent.width));
+		actualExtent.height = std::max(capabilities.minImageExtent.height,
+			std::min(capabilities.maxImageExtent.height, actualExtent.height));
 
-	int imageCount = surfaceCapabilities.minImageCount + 1;
-	if (surfaceCapabilities.maxImageCount > 0 && imageCount > surfaceCapabilities.maxImageCount) {
-		imageCount = surfaceCapabilities.maxImageCount;
+		return actualExtent;
+	}
+}
+
+struct SwapChainSupportDetails {
+    VkSurfaceCapabilitiesKHR capabilities;
+    std::vector<VkSurfaceFormatKHR> formats;
+    std::vector<VkPresentModeKHR> presentModes;
+};
+
+SwapChainSupportDetails querySwapChainSupport(VkPhysicalDevice device, VkSurfaceKHR surface) {
+	SwapChainSupportDetails details;
+
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);
+
+	uint32_t formatCount;
+	vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
+	if (formatCount != 0) {
+		details.formats.resize(formatCount);
+		vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, details.formats.data());
 	}
 
-	VkSwapchainCreateInfoKHR swapchainCreateInfo{};
-	swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-	swapchainCreateInfo.surface = surface;
-	swapchainCreateInfo.minImageCount = imageCount;
-	swapchainCreateInfo.imageFormat = swapchainImageFormat;
-	swapchainCreateInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR; // Placeholder
-	swapchainCreateInfo.imageExtent = surfaceCapabilities.currentExtent;
-	swapchainCreateInfo.imageArrayLayers = 1;
-	swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	uint32_t presentModeCount;
+	vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, nullptr);
+	if (presentModeCount != 0) {
+		details.presentModes.resize(presentModeCount);
+		vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, details.presentModes.data());
+	}
+
+	return details;
+}
+
+
+bool Renderer::createSwapchain() {
+	SwapChainSupportDetails surfaceCapabilities = querySwapChainSupport(physicalDevice, surface);
+	bool swapChainAdequate = !surfaceCapabilities.formats.empty() && !surfaceCapabilities.presentModes.empty();
+	if (!swapChainAdequate) {
+		LOG_ERR("Swap chain not adequate!");
+		return false;
+	}
+
+	int imageCount = surfaceCapabilities.capabilities.minImageCount + 1;
+	if (surfaceCapabilities.capabilities.maxImageCount > 0 && imageCount > surfaceCapabilities.capabilities.maxImageCount) {
+		imageCount = surfaceCapabilities.capabilities.maxImageCount;
+	}
+	
 
 	std::vector<VkPresentModeKHR> availablePresentModes;
 	uint32_t presentModeCount = 0;
@@ -315,8 +362,34 @@ void Renderer::createSwapchain() {
 	availablePresentModes.resize(presentModeCount);
 	vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, availablePresentModes.data());
 
+	std::vector<VkSurfaceFormatKHR> availableSurfaceFormats;
+	uint32_t formatCount = 0;
+	vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, nullptr);
+	availableSurfaceFormats.resize(formatCount);
+	vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, availableSurfaceFormats.data());
+
+	
+	VkSwapchainCreateInfoKHR swapchainCreateInfo{};
+	swapchainCreateInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+	swapchainCreateInfo.minImageCount = imageCount;
+	swapchainCreateInfo.imageArrayLayers = 1;
+	swapchainCreateInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 	swapchainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    swapchainCreateInfo.preTransform = surfaceCapabilities.currentTransform;
+    swapchainCreateInfo.preTransform = surfaceCapabilities.capabilities.currentTransform;
     swapchainCreateInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+	swapchainCreateInfo.surface = surface;
+	swapchainCreateInfo.imageFormat = chooseSwapSurfaceFormat(availableSurfaceFormats).format;
+	swapchainCreateInfo.imageColorSpace = chooseSwapSurfaceFormat(availableSurfaceFormats).colorSpace;
 	swapchainCreateInfo.presentMode = chooseSwapPresentMode(availablePresentModes);
+	swapchainCreateInfo.clipped = VK_TRUE;
+	swapchainCreateInfo.imageExtent = chooseSwapExtent(surfaceCapabilities.capabilities);
+	swapchainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
+
+	if (vkCreateSwapchainKHR(device, &swapchainCreateInfo, nullptr, &swapchain) != VK_SUCCESS) {
+		LOG_ERR("Failed to create swapchain!");
+		return false;
+	}
+	LOG_INFO("Swapchain created successfully");
+	
+	return true;
 }

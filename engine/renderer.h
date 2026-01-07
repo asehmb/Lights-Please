@@ -27,7 +27,7 @@ public:
     // Initialize the Vulkan instance and create an SDL Vulkan surface.
     // Returns true on success.
     bool initialize(SDL_Window* window);
-    void createSwapchain();
+    bool createSwapchain();
 
 private:
     VkInstance instance{VK_NULL_HANDLE};
@@ -38,7 +38,6 @@ private:
     std::vector<const char*> validationLayers;
     VkDebugUtilsMessengerEXT debugMessenger{VK_NULL_HANDLE};
     bool enableValidationLayers{false};
-    VkFormat swapchainImageFormat = VK_FORMAT_B8G8R8A8_SRGB; // Default format
-    VkExtent2D swapchainExtent = {800, 600}; // Default extent
+    VkSwapchainKHR swapchain{VK_NULL_HANDLE};
     // Add more Vulkan objects as needed (e.g., device, swapchain, etc.)
 };
