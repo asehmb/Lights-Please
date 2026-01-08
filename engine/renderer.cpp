@@ -5,6 +5,7 @@
 #include <SDL_vulkan.h>
 #include <cstddef>
 #include <cstdint>
+#include <sys/types.h>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
 #include <vulkan/vulkan_beta.h>
@@ -30,6 +31,10 @@ Renderer::Renderer(SDL_Window* window)
 
 Renderer::~Renderer()
 {
+	if (commandPool != VK_NULL_HANDLE) {
+		vkDestroyCommandPool(device, commandPool, nullptr);
+		commandPool = VK_NULL_HANDLE;
+	}
 	if (swapchain != VK_NULL_HANDLE) {
 		vkDestroySwapchainKHR(device, swapchain, nullptr);
 		swapchain = VK_NULL_HANDLE;
@@ -384,6 +389,7 @@ bool Renderer::createSwapchain() {
 	swapchainCreateInfo.clipped = VK_TRUE;
 	swapchainCreateInfo.imageExtent = chooseSwapExtent(surfaceCapabilities.capabilities);
 	swapchainCreateInfo.oldSwapchain = VK_NULL_HANDLE;
+	swapchainExtent = swapchainCreateInfo.imageExtent;
 
 	if (vkCreateSwapchainKHR(device, &swapchainCreateInfo, nullptr, &swapchain) != VK_SUCCESS) {
 		LOG_ERR("Failed to create swapchain!");
@@ -392,4 +398,99 @@ bool Renderer::createSwapchain() {
 	LOG_INFO("Swapchain created successfully");
 	
 	return true;
+}
+
+bool Renderer::recreateSwapchain() {
+	// Cleanup existing swapchain
+	if (swapchain != VK_NULL_HANDLE) {
+		vkDestroySwapchainKHR(device, swapchain, nullptr);
+		swapchain = VK_NULL_HANDLE;
+	}
+
+	// Recreate the swapchain
+	return createSwapchain();
+}
+
+bool Renderer::createCommandPool() {
+	QueueFamilyIndices queueFamilyIndices = findQueueFamilies(physicalDevice);
+
+	VkCommandPoolCreateInfo poolInfo{};
+	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+	poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
+
+	if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
+		LOG_ERR("Failed to create command pool!");
+		return false;
+	}
+
+	return true;
+}
+
+bool Renderer::createCommandBuffer() {
+	// Allocate a single command buffer from the command pool
+	VkCommandBufferAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	allocInfo.commandPool = commandPool;
+	// maybe VK_COMMAND_BUFFER_LEVEL_SECONDARY for secondary buffers
+	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	allocInfo.commandBufferCount = 1;
+
+	if (vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer) != VK_SUCCESS) {
+		LOG_ERR("Failed to allocate command buffer!");
+		return false;
+	}
+
+
+
+	return true;
+}
+
+void Renderer::recordCommandBuffer(uint32_t imageIndex) {
+	VkCommandBufferBeginInfo beginInfo{};
+	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	beginInfo.flags = 0; // Optional
+	beginInfo.pInheritanceInfo = nullptr; // Optional
+
+	if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
+		LOG_ERR("Failed to begin cmd buffer recording");
+		return;
+	}
+
+	VkRenderPassBeginInfo renderPassInfo{};
+	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	renderPassInfo.renderPass = renderPass;
+	renderPassInfo.renderArea.offset = { 0, 0 };
+	renderPassInfo.renderArea.extent = swapchainExtent;
+
+
+
+	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+	// TODO: Set viewports and scissors here
+
+	// TODO: Add drawing commands here
+	// vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+	// vkCmdDraw(commandBuffer, vertexCount, instanceCount, firstVertex, firstInstance);
+	
+	vkCmdEndRenderPass(commandBuffer);
+
+	// TODO: change barrier to subpass dependency if using multiple subpasses
+
+	VkImageMemoryBarrier barrier{};
+
+	// Transition the image to PRESENT_SRC_KHR layout for presentation
+	barrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+	barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+	barrier.dstAccessMask = 0;
+
+	vkCmdPipelineBarrier(
+		commandBuffer,
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // Source stage
+		VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,          // Destination stage
+		0, 0, nullptr, 0, nullptr, 1, &barrier
+	);
+
+	vkEndCommandBuffer(commandBuffer);
 }
