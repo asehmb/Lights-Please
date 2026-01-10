@@ -24,7 +24,7 @@ Mesh::Mesh(VkDevice device, VmaAllocator allocator, const MeshData& data)
         m_indexCount = static_cast<uint32_t>(data.indices.size());
     }
     
-    LOG_INFO("Created mesh with {} vertices, {} indices", m_vertexCount, m_indexCount);
+    LOG_INFO("MESH", "Created mesh with {} vertices, {} indices", m_vertexCount, m_indexCount);
 }
 
 Mesh::~Mesh() {
@@ -158,7 +158,7 @@ void Mesh::calculateBounds(const std::vector<Vertex>& vertices) {
 void Mesh::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
     // For now, this is a simplified version - in a real implementation,
     // you'd want to use a command pool and queue for transfers
-    LOG_WARN("copyBuffer not fully implemented - needs command buffer setup");
+    LOG_WARN("MESH", "copyBuffer not fully implemented - needs command buffer setup");
     // TODO: Implement proper buffer copying with command buffers
 }
 
@@ -347,7 +347,7 @@ Mesh Mesh::createPrimitive(VkDevice device, VmaAllocator allocator, PrimitiveTyp
         case PrimitiveType::Sphere:
             return createSphere(device, allocator);
         default:
-            LOG_WARN("Unknown primitive type, falling back to triangle");
+            LOG_WARN("MESH", "Unknown primitive type, falling back to triangle");
             return createTriangle(device, allocator);
     }
 }

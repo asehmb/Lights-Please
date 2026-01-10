@@ -57,9 +57,11 @@ private:
     VkSemaphore renderFinishedSemaphore{VK_NULL_HANDLE};
     VkFence inFlightFence{VK_NULL_HANDLE};
     uint32_t currentFrame = 0;
+
+    VkRenderingAttachmentInfo colorAttachmentInfo{};
     
-    // Triangle pipeline
-    std::unique_ptr<GraphicPipeline> trianglePipeline;
+    std::unique_ptr<GraphicPipeline> meshPipeline;
+    
     
     void initLogicalDevice();
     bool createSwapchain();
@@ -73,6 +75,17 @@ private:
     bool createSwapchainImageViews();
     bool createFramebuffers();
     bool createSyncObjects();
+
+    void drawFrame();
+
+    void pipelineBarrier(VkCommandBuffer commandBuffer,
+                         VkImage image,
+                         VkImageLayout oldLayout,
+                         VkImageLayout newLayout,
+                         VkPipelineStageFlags srcStageMask,
+                         VkPipelineStageFlags dstStageMask,
+                         VkAccessFlags srcAccessMask,
+                         VkAccessFlags dstAccessMask);
 
     std::unique_ptr<GraphicPipeline> createOpaquePipeline(const char* vertexShaderPath, const char* fragmentShaderPath);
 };

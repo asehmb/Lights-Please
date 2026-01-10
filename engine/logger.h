@@ -14,16 +14,13 @@ namespace logger {
     static std::mutex log_mutex;
 
     template <typename... Args>
-    void log(LogLevel level, std::string_view fmt, Args&&... args) {
+    void log(LogLevel level, std::string_view tag, std::string_view fmt, Args&&... args) {
         std::string message = std::vformat(fmt, std::make_format_args(args...));
-        
         const char* prefix = "[INFO]";
         if (level == LogLevel::Warning) prefix = "[WARN]";
         if (level == LogLevel::Error)   prefix = "[ERR ]";
-
-        // Lock only during the actual output
         std::lock_guard<std::mutex> lock(log_mutex);
-        std::cout << prefix << " " << message << std::endl;
+        std::cout << prefix << " [" << tag << "] " << message << std::endl;
     }
 
     // Convenience overload: allow calling logger::log(level, value) with a
@@ -32,28 +29,25 @@ namespace logger {
     // and format-strings still select the format-based overload above.
     template <typename T>
     std::enable_if_t<!std::is_convertible_v<T, std::string_view>, void>
-    log(LogLevel level, T&& value) {
-        // Use std::format to convert the value to a string using {}.
+    log(LogLevel level, std::string_view tag, T&& value) {
         std::string message = std::format("{}", std::forward<T>(value));
-
         const char* prefix = "[INFO]";
         if (level == LogLevel::Warning) prefix = "[WARN]";
         if (level == LogLevel::Error)   prefix = "[ERR ]";
-
         std::lock_guard<std::mutex> lock(log_mutex);
-        std::cout << prefix << " " << message << std::endl;
+        std::cout << prefix << " [" << tag << "] " << message << std::endl;
     }
 }
 
 // Define logging macros that become no-ops when NDEBUG (or project disable)
 // is active. Use LIGHTS_PLEASE_LOG_ENABLED for clarity.
 #if LIGHTS_PLEASE_LOG_ENABLED
-#  define LOG_INFO(fmt, ...)  logger::log(LogLevel::Info, fmt, ##__VA_ARGS__)
-#  define LOG_WARN(fmt, ...)  logger::log(LogLevel::Warning, fmt, ##__VA_ARGS__)
-#  define LOG_ERR(fmt, ...)   logger::log(LogLevel::Error, fmt, ##__VA_ARGS__)
+#  define LOG_INFO(tag, fmt, ...)  logger::log(LogLevel::Info, tag, fmt, ##__VA_ARGS__)
+#  define LOG_WARN(tag, fmt, ...)  logger::log(LogLevel::Warning, tag, fmt, ##__VA_ARGS__)
+#  define LOG_ERR(tag, fmt, ...)   logger::log(LogLevel::Error, tag, fmt, ##__VA_ARGS__)
 #else
 // Expand to nothing but keep expression safety by using (void)0
-#  define LOG_INFO(fmt, ...)  (void)0
-#  define LOG_WARN(fmt, ...)  (void)0
-#  define LOG_ERR(fmt, ...)   (void)0
+#  define LOG_INFO(tag, fmt, ...)  (void)0
+#  define LOG_WARN(tag, fmt, ...)  (void)0
+#  define LOG_ERR(tag, fmt, ...)   (void)0
 #endif

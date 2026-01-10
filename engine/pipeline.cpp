@@ -148,11 +148,10 @@ VkPipeline PipelineBuilder::buildRawPipeline(VkDevice device, VkRenderPass pass)
     VkPipeline newPipeline;
     // TODO: change pipeline cache to use one later
     if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &newPipeline) != VK_SUCCESS) {
-        
-        LOG_ERR("Failed to create graphics pipeline!");
-        LOG_INFO("Pipeline layout: {}", static_cast<void*>(pipelineLayout));
-        LOG_INFO("Render pass: {}", static_cast<void*>(pass));
-        LOG_INFO("Subpass: {}", 0);
+        LOG_ERR("PIPELINE", "Failed to create graphics pipeline!");
+        LOG_INFO("PIPELINE", "Pipeline layout: {}", static_cast<void*>(pipelineLayout));
+        LOG_INFO("PIPELINE", "Render pass: {}", static_cast<void*>(pass));
+        LOG_INFO("PIPELINE", "Subpass: {}", 0);
         throw std::runtime_error("Failed to create graphics pipeline!");
         return VK_NULL_HANDLE;
     }

@@ -53,7 +53,7 @@ void Engine::run() {
 
         if (platform::should_close()) is_running = false;
     }
-    LOG_INFO("Closing!");
+    LOG_INFO("ENGINE", "Closing!");
 }
 
 void Engine::process_input() {

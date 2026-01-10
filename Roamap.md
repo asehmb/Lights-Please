@@ -1,3 +1,6 @@
+
+---- FROM CHATGPT ----
+
 Phase 0 — Foundations (Setup)
 Deliverables
 Build system configured (CMake)
