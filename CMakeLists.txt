@@ -17,6 +17,7 @@ add_executable(Lights_Please main.cpp
     engine/renderer.cpp
     engine/engine.cpp
     engine/mesh.cpp
+    engine/pipeline.cpp
 )
 target_link_libraries(Lights_Please PRIVATE 
     SDL2::SDL2 

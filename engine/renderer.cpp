@@ -11,8 +11,10 @@
 #include <vulkan/vulkan_beta.h>
 #include <vector>
 #include "logger.h"
+#include "pipeline.h"
 #include <set>
 #include <cstring>
+#include "pipeline.h"
 
 Renderer::Renderer(SDL_Window* window)
 	: instance(VK_NULL_HANDLE), surface(VK_NULL_HANDLE)
@@ -493,4 +495,24 @@ void Renderer::recordCommandBuffer(uint32_t imageIndex) {
 	);
 
 	vkEndCommandBuffer(commandBuffer);
+}
+
+std::unique_ptr<GraphicPipeline> Renderer::createOpaquePipeline(const char* vertexShaderPath, const char* fragmentShaderPath) {
+	PipelineBuilder builder;
+
+	builder.set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	builder.set_polygon_mode(VK_POLYGON_MODE_FILL);
+	builder.set_cull_mode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE);
+	builder.enable_depthtest(true, VK_COMPARE_OP_LESS);
+	builder.disable_blending();
+	// TODO: Set proper pipeline layout instead of VK_NULL_HANDLE
+	builder.pipelineLayout = VK_NULL_HANDLE;
+
+	try {
+		GraphicPipeline pipeline = builder.build(device, renderPass, vertexShaderPath, fragmentShaderPath);
+		return std::make_unique<GraphicPipeline>(std::move(pipeline));
+	} catch (const std::exception& e) {
+		LOG_ERR("Failed to create opaque pipeline: {}", e.what());
+		return nullptr;
+	}
 }

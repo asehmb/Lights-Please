@@ -75,3 +75,94 @@ public:
     static Vector3 cross(const Vector3& a, const Vector3& b);
     float distance(const Vector3& other) const;
 };
+
+class Vector4 {
+public:
+    float x;
+    float y;
+    float z;
+    float w;
+
+    Vector4() : x(0), y(0), z(0), w(0) {}
+    Vector4(float x, float y, float z, float w) : x(x), y(y), z(z), w(w) {}
+    Vector4(const Vector3& v3, float w) : x(v3.x), y(v3.y), z(v3.z), w(w) {}
+
+    Vector4 operator+(const Vector4& other) const {
+        return Vector4(x + other.x, y + other.y, z + other.z, w + other.w);
+    }
+
+    Vector4 operator-(const Vector4& other) const {
+        return Vector4(x - other.x, y - other.y, z - other.z, w - other.w);
+    }
+
+    Vector4 operator*(float scalar) const {
+        return Vector4(x * scalar, y * scalar, z * scalar, w * scalar);
+    }
+
+    Vector4 operator/(float scalar) const {
+        return Vector4(x / scalar, y / scalar, z / scalar, w / scalar);
+    }
+
+    // Length and normalization
+    float length() const;
+    float lengthSquared() const;
+    Vector4 normalized() const;
+    void normalize();
+
+    // Dot and distance
+    float dot(const Vector4& other) const;
+    static float dot(const Vector4& a, const Vector4& b);
+    float distance(const Vector4& other) const;
+
+    // Conversion
+    Vector3 xyz() const { return Vector3(x, y, z); }
+};
+
+class Matrix4 {
+public:
+    // Storage: column-major order (like OpenGL/Vulkan)
+    float m[16];
+
+    // Constructors
+    Matrix4();
+    Matrix4(float diagonal);
+    Matrix4(const float* data);
+    
+    // Static factory methods
+    static Matrix4 identity();
+    static Matrix4 translate(const Vector3& translation);
+    static Matrix4 rotate(const Vector3& axis, float angleRadians);
+    static Matrix4 rotateX(float angleRadians);
+    static Matrix4 rotateY(float angleRadians);
+    static Matrix4 rotateZ(float angleRadians);
+    static Matrix4 scale(const Vector3& scale);
+    static Matrix4 scale(float uniformScale);
+    
+    // Camera/projection matrices
+    static Matrix4 perspective(float fovYRadians, float aspectRatio, float nearPlane, float farPlane);
+    static Matrix4 orthographic(float left, float right, float bottom, float top, float nearPlane, float farPlane);
+    static Matrix4 lookAt(const Vector3& eye, const Vector3& center, const Vector3& up);
+
+    // Matrix operations
+    Matrix4 operator+(const Matrix4& other) const;
+    Matrix4 operator-(const Matrix4& other) const;
+    Matrix4 operator*(const Matrix4& other) const;
+    Matrix4 operator*(float scalar) const;
+    
+    Vector4 operator*(const Vector4& vec) const;
+    Vector3 transformPoint(const Vector3& point) const;
+    Vector3 transformVector(const Vector3& vector) const;
+    
+    // Matrix properties
+    Matrix4 transposed() const;
+    Matrix4 inverse() const;
+    float determinant() const;
+    
+    // Element access
+    float& operator()(int row, int col) { return m[col * 4 + row]; }
+    const float& operator()(int row, int col) const { return m[col * 4 + row]; }
+    
+    // Data access
+    const float* data() const { return m; }
+    float* data() { return m; }
+};

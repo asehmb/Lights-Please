@@ -1,4 +1,5 @@
 #include "engine.h"
+#include "logger.h"
 #include "platform.h"
 #include <chrono>
 
@@ -52,6 +53,7 @@ void Engine::run() {
 
         if (platform::should_close()) is_running = false;
     }
+    LOG_INFO("Closing!");
 }
 
 void Engine::process_input() {

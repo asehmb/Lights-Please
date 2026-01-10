@@ -6,6 +6,8 @@
 #include <vector>
 #include <optional>
 #include <vulkan/vulkan_core.h>
+#include <memory>
+#include "pipeline.h"
 
 class Renderer {
 public:
@@ -26,6 +28,11 @@ public:
     // Initialize the Vulkan instance and create an SDL Vulkan surface.
     // Returns true on success.
     bool initialize(SDL_Window* window);
+    
+    // Public rendering methods
+    void beginFrame();
+    void endFrame();
+    void drawTriangle();
 
 private:
     VkInstance instance{VK_NULL_HANDLE};
@@ -41,6 +48,19 @@ private:
     VkCommandBuffer commandBuffer{VK_NULL_HANDLE};
     VkRenderPass renderPass{VK_NULL_HANDLE};
     VkExtent2D swapchainExtent{};
+    
+    // Swapchain framebuffers and synchronization
+    std::vector<VkImage> swapchainImages;
+    std::vector<VkImageView> swapchainImageViews;
+    std::vector<VkFramebuffer> framebuffers;
+    VkSemaphore imageAvailableSemaphore{VK_NULL_HANDLE};
+    VkSemaphore renderFinishedSemaphore{VK_NULL_HANDLE};
+    VkFence inFlightFence{VK_NULL_HANDLE};
+    uint32_t currentFrame = 0;
+    
+    // Triangle pipeline
+    std::unique_ptr<GraphicPipeline> trianglePipeline;
+    
     void initLogicalDevice();
     bool createSwapchain();
     bool pickPhysicalDevice();
@@ -49,6 +69,10 @@ private:
     bool createCommandPool();
     bool createCommandBuffer();
     void recordCommandBuffer(uint32_t imageIndex);
+    
+    bool createSwapchainImageViews();
+    bool createFramebuffers();
+    bool createSyncObjects();
 
-    bool createGraphicsPipeline();
+    std::unique_ptr<GraphicPipeline> createOpaquePipeline(const char* vertexShaderPath, const char* fragmentShaderPath);
 };
