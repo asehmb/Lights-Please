@@ -70,4 +70,9 @@ void Engine::update(float fixed_dt) {
 void Engine::render(float alpha) {
     // Render the current frame here
     // Use 'alpha' for interpolating between physics states if needed
+    if (renderer) {
+        renderer->drawFrame();
+    } else{
+        LOG_ERR("ENGINE", "Renderer doesnt exist??");
+    }
 }

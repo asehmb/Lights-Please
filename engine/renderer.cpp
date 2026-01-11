@@ -43,6 +43,7 @@ Renderer::Renderer(SDL_Window* window)
 
 Renderer::~Renderer()
 {
+	vkDeviceWaitIdle(device);
 	if (!framebuffers.empty()) {
 		for (auto framebuffer : framebuffers) {
 			if (framebuffer != VK_NULL_HANDLE) {
@@ -89,6 +90,8 @@ Renderer::~Renderer()
 		}
 		swapchainImageViews.clear();
 	}
+	// Clear layout tracking
+	swapchainImageLayouts.clear();
 	if (swapchain != VK_NULL_HANDLE) {
 		vkDestroySwapchainKHR(device, swapchain, nullptr);
 		swapchain = VK_NULL_HANDLE;
@@ -322,6 +325,13 @@ void Renderer::initLogicalDevice() {
 	extensions.push_back(VK_KHR_MULTIVIEW_EXTENSION_NAME);
 	extensions.push_back(VK_KHR_MAINTENANCE_2_EXTENSION_NAME);
 	extensions.push_back(VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME);
+	extensions.push_back(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
+
+	VkPhysicalDeviceSynchronization2Features sync2Features = {};
+	sync2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES;
+	sync2Features.pNext = nullptr;
+	sync2Features.synchronization2 = VK_TRUE;
+	createInfo.pNext = &sync2Features;
 
 
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -466,18 +476,44 @@ bool Renderer::createSwapchain() {
 	vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, swapchainImages.data());
 	swapchainImageFormat = swapchainCreateInfo.imageFormat;
 	
+	// Initialize layout tracking - swapchain images start in undefined layout
+	swapchainImageLayouts.resize(swapchainImageCount, VK_IMAGE_LAYOUT_UNDEFINED);
+	
 	return true;
 }
 
 bool Renderer::recreateSwapchain() {
+	vkDeviceWaitIdle(device);
+
+
 	// Cleanup existing swapchain
+
+	if (!framebuffers.empty()) {
+		for (auto framebuffer : framebuffers) {
+			if (framebuffer != VK_NULL_HANDLE) {
+				vkDestroyFramebuffer(device, framebuffer, nullptr);
+			}
+		}
+		framebuffers.clear();
+	}
+	if (!swapchainImageViews.empty()) {
+		for (auto imageView : swapchainImageViews) {
+			vkDestroyImageView(device, imageView, nullptr);
+		}
+		swapchainImageViews.clear();
+	}
 	if (swapchain != VK_NULL_HANDLE) {
 		vkDestroySwapchainKHR(device, swapchain, nullptr);
 		swapchain = VK_NULL_HANDLE;
 	}
+	// Clear layout tracking for old swapchain
+	swapchainImageLayouts.clear();
 
 	// Recreate the swapchain
-	return createSwapchain();
+	createSwapchain();
+	createSwapchainImageViews();
+	createFramebuffers();
+	return true;
 }
 
 bool Renderer::createCommandPool() {
@@ -526,21 +562,30 @@ void Renderer::recordCommandBuffer(uint32_t imageIndex) {
 		return;
 	}
 
+	// Get the current layout of this swapchain image
+	VkImageLayout currentLayout = swapchainImageLayouts[imageIndex];
 
 	transitionImage(commandBuffer, swapchainImages[imageIndex],
 		 	VK_IMAGE_LAYOUT_UNDEFINED,
 			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+			VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
 			0,
-			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+			VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT
 	);
+
+	// Update layout tracking
+	swapchainImageLayouts[imageIndex] = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
 	VkRenderPassBeginInfo renderPassInfo{};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 	renderPassInfo.renderPass = renderPass;
 	renderPassInfo.renderArea.offset = { 0, 0 };
 	renderPassInfo.renderArea.extent = swapchainExtent;
+	renderPassInfo.framebuffer = framebuffers[imageIndex];
+	renderPassInfo.clearValueCount = 1;
+	VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
+	renderPassInfo.pClearValues = &clearColor;
 
 
 
@@ -549,8 +594,19 @@ void Renderer::recordCommandBuffer(uint32_t imageIndex) {
 	GraphicPipeline* currentPipeline = nullptr;
 
 	// TODO: Set viewports and scissors here
+	VkViewport viewport{};
+	viewport.x = 0.0f;
+	viewport.y = 0.0f;
+	viewport.width = static_cast<float>(swapchainExtent.width);
+	viewport.height = static_cast<float>(swapchainExtent.height);
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+	vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 
-	// TODO: Add drawing commands here
+	VkRect2D scissor{};
+	scissor.offset = {0, 0};
+	scissor.extent = swapchainExtent;
+	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
 	for (const auto& drawable : drawables) {
 		if (currentPipeline != drawable.material->pipeline.get()) {
@@ -568,11 +624,14 @@ void Renderer::recordCommandBuffer(uint32_t imageIndex) {
 	transitionImage(commandBuffer, swapchainImages[imageIndex],
 			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 			VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-			VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-			VK_ACCESS_MEMORY_READ_BIT
+			VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+			VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
+			VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+			VK_ACCESS_2_MEMORY_READ_BIT
 	);
+
+	// Update layout tracking
+	swapchainImageLayouts[imageIndex] = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
 	vkEndCommandBuffer(commandBuffer);
 }
@@ -603,19 +662,28 @@ void Renderer::drawFrame() {
 	
 	// wait for previous frame
 	vkWaitForFences(device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
-	vkResetFences(device, 1, &inFlightFence);
 
 	// Get next image from swapchain
 	uint32_t imageIndex;
 	VkResult result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX,
 		imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
 
+	if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+		recreateSwapchain();
+		return;
+	} else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+		LOG_ERR("DRAW_FRAME", "Failed to acquire swap chain image!");
+		return;
+	}
+	vkResetFences(device, 1, &inFlightFence);
+
+
 	recordCommandBuffer(imageIndex);
 
 	// Submit command buffer
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	VkSemaphore waitSemaphores[] = { imageAvailableSemaphore };
+	VkSemaphore waitSemaphores[] = { imageAvailableSemaphore }; 
 	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 	submitInfo.waitSemaphoreCount = 1;
 	submitInfo.pWaitSemaphores = waitSemaphores;
@@ -630,6 +698,28 @@ void Renderer::drawFrame() {
 		LOG_ERR("DRAW_FRAME", "Failed to submit draw command buffer!");
 		return;
 	}
+
+	// Present the image
+	VkPresentInfoKHR presentInfo{};
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = signalSemaphores;
+
+	VkSwapchainKHR swapChains[] = { swapchain };
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = swapChains;
+	presentInfo.pImageIndices = &imageIndex;
+	presentInfo.pResults = nullptr; // Optional
+
+	result = vkQueuePresentKHR(presentQueue, &presentInfo);
+
+	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+		recreateSwapchain();
+	} else if (result != VK_SUCCESS) {
+		LOG_ERR("DRAW_FRAME", "Failed to present swap chain image!");
+	}
+	vkQueueWaitIdle(presentQueue);
+
 }
 
 // Pipeline Barrier helper function.
@@ -649,34 +739,45 @@ void Renderer::transitionImage(VkCommandBuffer commandBuffer,
 						 VkImage image,
 						 VkImageLayout oldLayout,
 						 VkImageLayout newLayout,
-						 VkPipelineStageFlags srcStageMask,
-						 VkPipelineStageFlags dstStageMask,
-						 VkAccessFlags srcAccessMask,
-						 VkAccessFlags dstAccessMask) {
-	VkImageMemoryBarrier2 barrier{};
-	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-	barrier.oldLayout = oldLayout;
-	barrier.newLayout = newLayout;
-	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.image = image;
-	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	barrier.subresourceRange.baseMipLevel = 0;
-	barrier.subresourceRange.levelCount = 1;
-	barrier.subresourceRange.baseArrayLayer = 0;
-	barrier.subresourceRange.layerCount = 1;
-	barrier.srcAccessMask = srcAccessMask;
-	barrier.dstAccessMask = dstAccessMask;
+						 VkPipelineStageFlags2 srcStageMask,
+						 VkPipelineStageFlags2 dstStageMask,
+						 VkAccessFlags2 srcAccessMask,
+						 VkAccessFlags2 dstAccessMask) {
+	// VkImageMemoryBarrier2 barrier{};
+	// barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+	// barrier.srcStageMask = srcStageMask;
+	// barrier.srcAccessMask = srcAccessMask;
+	// barrier.dstStageMask = dstStageMask;
+	// barrier.dstAccessMask = dstAccessMask;
+	// barrier.oldLayout = oldLayout;
+	// barrier.newLayout = newLayout;
+	// barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	// barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	// barrier.image = image;
+	// barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	// barrier.subresourceRange.baseMipLevel = 0;
+	// barrier.subresourceRange.levelCount = 1;
+	// barrier.subresourceRange.baseArrayLayer = 0;
+	// barrier.subresourceRange.layerCount = 1;
 
-	VkDependencyInfo dependencyInfo{};
-	dependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-	dependencyInfo.imageMemoryBarrierCount = 1;
-	dependencyInfo.pImageMemoryBarriers = &barrier;
+	// VkDependencyInfo dependencyInfo{};
+	// dependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+	// dependencyInfo.imageMemoryBarrierCount = 1;
+	// dependencyInfo.pImageMemoryBarriers = &barrier;
+	// dependencyInfo.memoryBarrierCount = 0;
+	// dependencyInfo.pMemoryBarriers = nullptr;
+	// dependencyInfo.bufferMemoryBarrierCount = 0;
+	// dependencyInfo.pBufferMemoryBarriers = nullptr;
 
-	vkCmdPipelineBarrier2(
-		commandBuffer,
-		&dependencyInfo
-	);
+	// PFN_vkCmdPipelineBarrier2KHR fp_vkCmdPipelineBarrier2 = nullptr;
+	// fp_vkCmdPipelineBarrier2 =
+	// 	(PFN_vkCmdPipelineBarrier2KHR)
+	// 	vkGetDeviceProcAddr(device, "vkCmdPipelineBarrier2KHR");
+
+	// fp_vkCmdPipelineBarrier2(
+	// 	commandBuffer,
+	// 	&dependencyInfo
+	// );
 }
 
 void Renderer::drawMesh(VkCommandBuffer commandBuffer, Mesh* mesh) {

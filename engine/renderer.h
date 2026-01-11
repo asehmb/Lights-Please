@@ -81,6 +81,7 @@ private:
     // Swapchain framebuffers 
     std::vector<VkImage> swapchainImages;
     std::vector<VkImageView> swapchainImageViews;
+    std::vector<VkImageLayout> swapchainImageLayouts; // Track current layout of each swapchain image
     VkFormat swapchainImageFormat;
     std::vector<VkFramebuffer> framebuffers;
     uint32_t imageCount{2}; // Double buffering
@@ -140,10 +141,10 @@ private:
                          VkImage image,
                          VkImageLayout oldLayout,
                          VkImageLayout newLayout,
-                         VkPipelineStageFlags srcStageMask,
-                         VkPipelineStageFlags dstStageMask,
-                         VkAccessFlags srcAccessMask,
-                         VkAccessFlags dstAccessMask);
+                         VkPipelineStageFlags2 srcStageMask,
+                         VkPipelineStageFlags2 dstStageMask,
+                         VkAccessFlags2 srcAccessMask,
+                         VkAccessFlags2 dstAccessMask);
 
     std::unique_ptr<GraphicPipeline> createOpaquePipeline(const char* vertexShaderPath, const char* fragmentShaderPath);
 };
