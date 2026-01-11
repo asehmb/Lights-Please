@@ -112,7 +112,6 @@ private:
     
     bool createSwapchainImageViews();
     bool createFramebuffers();
-    bool createSyncObjects();
 
     bool createRenderPass();
 

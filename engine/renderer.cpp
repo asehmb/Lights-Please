@@ -35,6 +35,7 @@ Renderer::Renderer(SDL_Window* window)
 			createFences();
 			createDescriptorSetLayouts();
 			createRenderPass();
+			createFramebuffers();
 			
 		}
 	}
@@ -42,6 +43,14 @@ Renderer::Renderer(SDL_Window* window)
 
 Renderer::~Renderer()
 {
+	if (!framebuffers.empty()) {
+		for (auto framebuffer : framebuffers) {
+			if (framebuffer != VK_NULL_HANDLE) {
+				vkDestroyFramebuffer(device, framebuffer, nullptr);
+			}
+		}
+		framebuffers.clear();
+	}
 	if (renderPass != VK_NULL_HANDLE) {
 		vkDestroyRenderPass(device, renderPass, nullptr);
 		renderPass = VK_NULL_HANDLE;
@@ -125,10 +134,10 @@ bool Renderer::initialize(SDL_Window* window)
     extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 #endif
 
-	LOG_INFO("VULKAN", "Extensions count: {}", static_cast<unsigned>(extensions.size()));
-	LOG_INFO("VULKAN", "Extensions:");
+	LOG_INFO("RENDERER", "Extensions count: {}", static_cast<unsigned>(extensions.size()));
+	LOG_INFO("RENDERER", "Extensions:");
 	for (const auto& ext : extensions) {
-		LOG_INFO("VULKAN", "  {}", ext);
+		LOG_INFO("RENDERER", "\t{}", ext);
 	}
 
 	// Determine whether to enable Validation layers (only in debug builds)
@@ -176,7 +185,7 @@ bool Renderer::initialize(SDL_Window* window)
 	// Create the instance
 	VkResult res = vkCreateInstance(&createInfo, nullptr, &instance);
 	if (res != VK_SUCCESS) {
-		LOG_ERR("VULKAN", "vkCreateInstance failed: {}", static_cast<int>(res));
+		LOG_ERR("RENDERER", "vkCreateInstance failed: {}", static_cast<int>(res));
 		return false;
 	}
 
@@ -198,24 +207,24 @@ bool Renderer::initialize(SDL_Window* window)
 											  const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
 											  void* pUserData) -> VkBool32 {
 				(void)messageSeverity; (void)messageTypes; (void)pUserData;
-				LOG_ERR("VULKAN", "{}", pCallbackData->pMessage);
+				LOG_ERR("RENDERER", "{}", pCallbackData->pMessage);
 				return VK_FALSE;
 			};
 
 			VkResult r2 = func(instance, &createInfoDbg, nullptr, &debugMessenger);
 			if (r2 != VK_SUCCESS) {
-				LOG_WARN("VULKAN", "vkCreateDebugUtilsMessengerEXT failed: {}", static_cast<int>(r2));
+				LOG_WARN("RENDERER", "vkCreateDebugUtilsMessengerEXT failed: {}", static_cast<int>(r2));
 			} else {
-				LOG_INFO("VULKAN", "Debug messenger created");
+				LOG_INFO("RENDERER", "Debug messenger created");
 			}
 		} else {
-			LOG_WARN("VULKAN", "vkCreateDebugUtilsMessengerEXT not found");
+			LOG_WARN("RENDERER", "vkCreateDebugUtilsMessengerEXT not found");
 		}
 	}
 
 	// Create Vulkan surface from SDL window
 	if(!SDL_Vulkan_CreateSurface(window, instance, &surface)){
-		LOG_ERR("VULKAN", "Failed to create Vulkan surface from SDL window");
+		LOG_ERR("RENDERER", "Failed to create Vulkan surface from SDL window");
 		return false;
 	}
 	LOG_INFO("RENDERER", "Renderer initialized");
@@ -227,25 +236,25 @@ bool Renderer::pickPhysicalDevice() {
 	uint32_t deviceCount = 0;
 	vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
 	if (deviceCount == 0) {
-		LOG_ERR("VULKAN", "Failed to find GPUs with Vulkan support!");
+		LOG_ERR("PHYSICAL_DEVICE", "Failed to find GPUs with Vulkan support!");
 		return false;
 	}
 	std::vector<VkPhysicalDevice> devices(deviceCount);
 	vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
 
-	LOG_INFO("VULKAN", "Found {} Vulkan-capable devices", deviceCount);
+	LOG_INFO("PHYSICAL_DEVICE", "Found {} Vulkan-capable devices", deviceCount);
 	for (const auto& device : devices) {
 		// TODO: here you would typically check for device properties and features and 
 		// check if they meet your requirements
 		VkPhysicalDeviceProperties deviceProperties;
 		vkGetPhysicalDeviceProperties(device, &deviceProperties);
-		LOG_INFO("VULKAN", "\tDevice Name: {}", deviceProperties.deviceName);
+		LOG_INFO("PHYSICAL_DEVICE", "\tDevice Name: {}", deviceProperties.deviceName);
 	}
 
 	physicalDevice = devices[0]; // Just pick the first one for now
 
 	if (physicalDevice == VK_NULL_HANDLE) {
-		LOG_ERR("VULKAN", "Failed to select a physical device!");
+		LOG_ERR("PHYSICAL_DEVICE", "Failed to select a physical device!");
 		return false;
 	}
 	
@@ -305,11 +314,13 @@ void Renderer::initLogicalDevice() {
 
 	std::vector<const char*> extensions;
 	if (enableValidationLayers && !validationLayers.empty()) {
-		LOG_INFO("VULKAN", "Enabling validation layers for logical device");
+		LOG_INFO("LOGICAL_DEVICE", "Enabling validation layers for logical device");
 		extensions.push_back(VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME);
 
 	}
 	extensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+	extensions.push_back(VK_KHR_MULTIVIEW_EXTENSION_NAME);
+	extensions.push_back(VK_KHR_MAINTENANCE_2_EXTENSION_NAME);
 	extensions.push_back(VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME);
 
 
@@ -324,9 +335,9 @@ void Renderer::initLogicalDevice() {
 
 		vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
 		vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &presentQueue);
-		LOG_INFO("VULKAN", "Logical device created successfully");
+		LOG_INFO("LOGICAL_DEVICE", "Logical device created successfully");
 	} else {
-		LOG_ERR("VULKAN", "Failed to create logical device!");
+		LOG_ERR("LOGICAL_DEVICE", "Failed to create logical device!");
 	}
 }
 
@@ -402,7 +413,7 @@ bool Renderer::createSwapchain() {
 	SwapChainSupportDetails surfaceCapabilities = querySwapChainSupport(physicalDevice, surface);
 	bool swapChainAdequate = !surfaceCapabilities.formats.empty() && !surfaceCapabilities.presentModes.empty();
 	if (!swapChainAdequate) {
-		LOG_ERR("VULKAN", "Swap chain not adequate!");
+		LOG_ERR("SWAPCHAIN", "Swap chain not adequate!");
 		return false;
 	}
 
@@ -443,10 +454,10 @@ bool Renderer::createSwapchain() {
 	swapchainExtent = swapchainCreateInfo.imageExtent;
 
 	if (vkCreateSwapchainKHR(device, &swapchainCreateInfo, nullptr, &swapchain) != VK_SUCCESS) {
-		LOG_ERR("VULKAN", "Failed to create swapchain!");
+		LOG_ERR("SWAPCHAIN", "Failed to create swapchain!");
 		return false;
 	}
-	LOG_INFO("VULKAN", "Swapchain created successfully");
+	LOG_INFO("SWAPCHAIN", "Swapchain created successfully");
 	
 	// Retrieve swapchain images
 	uint32_t swapchainImageCount = 0;
@@ -478,12 +489,11 @@ bool Renderer::createCommandPool() {
 	poolInfo.queueFamilyIndex = queueFamilyIndices.graphicsFamily.value();
 
 	if (vkCreateCommandPool(device, &poolInfo, nullptr, &commandPool) != VK_SUCCESS) {
-		LOG_ERR("VULKAN", "Failed to create command pool!");
+		LOG_ERR("COMMAND_POOL", "Failed to create command pool!");
 		return false;
 	}
 
-	LOG_INFO("VULKAN", "Created Command Pool succesfully!");
-
+	LOG_INFO("COMMAND_POOL", "Created Command Pool succesfully!");
 	return true;
 }
 
@@ -497,12 +507,11 @@ bool Renderer::createCommandBuffer() {
 	allocInfo.commandBufferCount = 1;
 
 	if (vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer) != VK_SUCCESS) {
-		LOG_ERR("VULKAN", "Failed to allocate command buffer!");
+		LOG_ERR("COMMAND_BUFFER", "Failed to allocate command buffer!");
 		return false;
 	}
 
-	LOG_INFO("VULKAN", "Allocated Command Buffer successfully!");
-
+	LOG_INFO("COMMAND_BUFFER", "Allocated Command Buffer successfully!");
 	return true;
 }
 
@@ -513,7 +522,7 @@ void Renderer::recordCommandBuffer(uint32_t imageIndex) {
 	beginInfo.pInheritanceInfo = nullptr; // Optional
 
 	if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
-		LOG_ERR("VULKAN", "Failed to begin cmd buffer recording");
+		LOG_ERR("RECORD_COMMAND_BUFFER", "Failed to begin cmd buffer recording");
 		return;
 	}
 
@@ -618,7 +627,7 @@ void Renderer::drawFrame() {
 	submitInfo.pSignalSemaphores = signalSemaphores;
 
 	if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFence) != VK_SUCCESS) {
-		LOG_ERR("VULKAN", "Failed to submit draw command buffer!");
+		LOG_ERR("DRAW_FRAME", "Failed to submit draw command buffer!");
 		return;
 	}
 }
@@ -687,9 +696,9 @@ void Renderer::createSemaphores() {
 
 	if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphore) != VK_SUCCESS ||
 		vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphore) != VK_SUCCESS) {
-		LOG_ERR("VULKAN", "Failed to create semaphores!");
+		LOG_ERR("SEMAPHORE", "Failed to create semaphores!");
 	} else {
-		LOG_INFO("VULKAN", "Semaphores created successfully!");
+		LOG_INFO("SEMAPHORE", "Semaphores created successfully!");
 	}
 }
 
@@ -700,9 +709,9 @@ void Renderer::createFences() {
 	fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT; // Start signaled so we don't wait on first frame
 
 	if (vkCreateFence(device, &fenceInfo, nullptr, &inFlightFence) != VK_SUCCESS) {
-		LOG_ERR("VULKAN", "Failed to create fence!");
+		LOG_ERR("FENCE", "Failed to create fence!");
 	} else {
-		LOG_INFO("VULKAN", "Fence created successfully!");
+		LOG_INFO("FENCE", "Fence created successfully!");
 	}
 }
 
@@ -767,11 +776,11 @@ bool Renderer::createRenderPass() {
 
 
 	if (fpCreateRenderPass2KHR(device, &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS) {
-		LOG_ERR("VULKAN", "Failed to create render pass!");
+		LOG_ERR("RENDER_PASS", "Failed to create render pass!");
 		return false;
 	}
 
-	LOG_INFO("VULKAN", "Render pass created successfully");
+	LOG_INFO("RENDER_PASS", "Render pass created successfully");
 
 	return true;
 }
@@ -792,9 +801,9 @@ void Renderer::createDescriptorSetLayouts() {
 	globalLayoutInfo.pBindings = &globalBinding;
 
 	if (vkCreateDescriptorSetLayout(device, &globalLayoutInfo, nullptr, &globalDescriptorSetLayout) != VK_SUCCESS) {
-		LOG_ERR("VULKAN", "Failed to create global descriptor set layout!");
+		LOG_ERR("DESCRIPTOR_SET_LAYOUT", "Failed to create global descriptor set layout!");
 	} else {
-		LOG_INFO("VULKAN", "Global descriptor set layout created successfully!");
+		LOG_INFO("DESCRIPTOR_SET_LAYOUT", "Global descriptor set layout created successfully!");
 	}
 
 	// Material Descriptor Set Layout
@@ -811,9 +820,9 @@ void Renderer::createDescriptorSetLayouts() {
 	materialLayoutInfo.pBindings = &materialBinding;
 
 	if (vkCreateDescriptorSetLayout(device, &materialLayoutInfo, nullptr, &materialDescriptorSetLayout) != VK_SUCCESS) {
-		LOG_ERR("VULKAN", "Failed to create material descriptor set layout!");
+		LOG_ERR("DESCRIPTOR_SET_LAYOUT", "Failed to create material descriptor set layout!");
 	} else {
-		LOG_INFO("VULKAN", "Material descriptor set layout created successfully!");
+		LOG_INFO("DESCRIPTOR_SET_LAYOUT", "Material descriptor set layout created successfully!");
 	}
 }
 
@@ -838,12 +847,40 @@ bool Renderer::createSwapchainImageViews() {
 		viewInfo.subresourceRange.layerCount = 1;
 
 		if (vkCreateImageView(device, &viewInfo, nullptr, &swapchainImageViews[i]) != VK_SUCCESS) {
-			LOG_ERR("VULKAN", "Failed to create image views!");
+			LOG_ERR("IMAGE_VIEW", "Failed to create image views!");
 			return false;
 		}
 	}
 
-	LOG_INFO("SWAPCHAIN IMAGEVIEWS", "Created {} swapchain image views successfully", swapchainImageViews.size());
+	LOG_INFO("IMAGE_VIEW", "Created {} swapchain image views successfully", swapchainImageViews.size());
+
+	return true;
+}
+
+bool Renderer::createFramebuffers() {
+	framebuffers.resize(swapchainImageViews.size());
+
+	for (size_t i = 0; i < swapchainImageViews.size(); i++) {
+		VkImageView attachments[] = {
+			swapchainImageViews[i]
+		};
+
+		VkFramebufferCreateInfo framebufferInfo{};
+		framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+		framebufferInfo.renderPass = renderPass;
+		framebufferInfo.attachmentCount = 1;
+		framebufferInfo.pAttachments = attachments;
+		framebufferInfo.width = swapchainExtent.width;
+		framebufferInfo.height = swapchainExtent.height;
+		framebufferInfo.layers = 1;
+
+		if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &framebuffers[i]) != VK_SUCCESS) {
+			LOG_ERR("FRAMEBUFFER", "Failed to create framebuffer!");
+			return false;
+		}
+	}
+
+	LOG_INFO("FRAMEBUFFER", "Framebuffers created successfully");
 
 	return true;
 }
