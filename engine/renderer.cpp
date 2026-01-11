@@ -743,41 +743,41 @@ void Renderer::transitionImage(VkCommandBuffer commandBuffer,
 						 VkPipelineStageFlags2 dstStageMask,
 						 VkAccessFlags2 srcAccessMask,
 						 VkAccessFlags2 dstAccessMask) {
-	// VkImageMemoryBarrier2 barrier{};
-	// barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-	// barrier.srcStageMask = srcStageMask;
-	// barrier.srcAccessMask = srcAccessMask;
-	// barrier.dstStageMask = dstStageMask;
-	// barrier.dstAccessMask = dstAccessMask;
-	// barrier.oldLayout = oldLayout;
-	// barrier.newLayout = newLayout;
-	// barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	// barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	// barrier.image = image;
-	// barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-	// barrier.subresourceRange.baseMipLevel = 0;
-	// barrier.subresourceRange.levelCount = 1;
-	// barrier.subresourceRange.baseArrayLayer = 0;
-	// barrier.subresourceRange.layerCount = 1;
+	VkImageMemoryBarrier2 barrier{};
+	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+	barrier.srcStageMask = srcStageMask;
+	barrier.srcAccessMask = srcAccessMask;
+	barrier.dstStageMask = dstStageMask;
+	barrier.dstAccessMask = dstAccessMask;
+	barrier.oldLayout = oldLayout;
+	barrier.newLayout = newLayout;
+	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.image = image;
+	barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	barrier.subresourceRange.baseMipLevel = 0;
+	barrier.subresourceRange.levelCount = 1;
+	barrier.subresourceRange.baseArrayLayer = 0;
+	barrier.subresourceRange.layerCount = 1;
 
-	// VkDependencyInfo dependencyInfo{};
-	// dependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-	// dependencyInfo.imageMemoryBarrierCount = 1;
-	// dependencyInfo.pImageMemoryBarriers = &barrier;
-	// dependencyInfo.memoryBarrierCount = 0;
-	// dependencyInfo.pMemoryBarriers = nullptr;
-	// dependencyInfo.bufferMemoryBarrierCount = 0;
-	// dependencyInfo.pBufferMemoryBarriers = nullptr;
+	VkDependencyInfo dependencyInfo{};
+	dependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+	dependencyInfo.imageMemoryBarrierCount = 1;
+	dependencyInfo.pImageMemoryBarriers = &barrier;
+	dependencyInfo.memoryBarrierCount = 0;
+	dependencyInfo.pMemoryBarriers = nullptr;
+	dependencyInfo.bufferMemoryBarrierCount = 0;
+	dependencyInfo.pBufferMemoryBarriers = nullptr;
 
-	// PFN_vkCmdPipelineBarrier2KHR fp_vkCmdPipelineBarrier2 = nullptr;
-	// fp_vkCmdPipelineBarrier2 =
-	// 	(PFN_vkCmdPipelineBarrier2KHR)
-	// 	vkGetDeviceProcAddr(device, "vkCmdPipelineBarrier2KHR");
+	PFN_vkCmdPipelineBarrier2KHR fp_vkCmdPipelineBarrier2 = nullptr;
+	fp_vkCmdPipelineBarrier2 =
+		(PFN_vkCmdPipelineBarrier2KHR)
+		vkGetDeviceProcAddr(device, "vkCmdPipelineBarrier2KHR");
 
-	// fp_vkCmdPipelineBarrier2(
-	// 	commandBuffer,
-	// 	&dependencyInfo
-	// );
+	fp_vkCmdPipelineBarrier2(
+		commandBuffer,
+		&dependencyInfo
+	);
 }
 
 void Renderer::drawMesh(VkCommandBuffer commandBuffer, Mesh* mesh) {
@@ -830,8 +830,8 @@ bool Renderer::createRenderPass() {
 	// TODO: we don't care about stencil for now, when should we?
 	colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 	colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-	colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-	colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+	colorAttachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+	colorAttachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
 	
 
