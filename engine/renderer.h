@@ -11,6 +11,7 @@
 #include "material.hpp"
 #include "mesh.h"
 #include "pipeline.h"
+#include "descriptor_allocator.h"
 
 class Renderer {
 public:
@@ -74,10 +75,13 @@ private:
     VkQueue graphicsQueue;
     VkQueue presentQueue;
     QueueFamilyIndices queueFamilyIndices;
+    VkDescriptorSetLayout globalDescriptorSetLayout{VK_NULL_HANDLE};
+    VkDescriptorSetLayout materialDescriptorSetLayout{VK_NULL_HANDLE};
     
     // Swapchain framebuffers 
     std::vector<VkImage> swapchainImages;
     std::vector<VkImageView> swapchainImageViews;
+    VkFormat swapchainImageFormat;
     std::vector<VkFramebuffer> framebuffers;
     uint32_t imageCount{2}; // Double buffering
 
@@ -94,6 +98,8 @@ private:
     
     std::vector<Drawable> drawables;
 
+    std::unique_ptr<DescriptorAllocator> descriptorAllocator;
+
 
     void initLogicalDevice();
     bool createSwapchain();
@@ -108,10 +114,14 @@ private:
     bool createFramebuffers();
     bool createSyncObjects();
 
+    bool createRenderPass();
+
     void drawMesh(VkCommandBuffer commandBuffer, Mesh* mesh);
 
     void createSemaphores();
     void createFences();
+
+    void createDescriptorSetLayouts();
 
     // TODO: refactor to use this structure for frame data
     //     struct FrameData {

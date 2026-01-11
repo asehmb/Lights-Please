@@ -18,6 +18,7 @@ add_executable(Lights_Please main.cpp
     engine/engine.cpp
     engine/mesh.cpp
     engine/pipeline.cpp
+    engine/descriptor_allocator.cpp
 )
 target_link_libraries(Lights_Please PRIVATE 
     SDL2::SDL2 

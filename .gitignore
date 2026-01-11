@@ -4,7 +4,9 @@ lights-please
 build/
 .idea/
 .DS_Store
+.vscode/
 
 .cache
 
 compile_commands.json
+

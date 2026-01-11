@@ -3,6 +3,7 @@
 #include <SDL.h>
 #include <SDL_stdinc.h>
 #include <SDL_vulkan.h>
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <sys/types.h>
@@ -27,16 +28,32 @@ Renderer::Renderer(SDL_Window* window)
 		if (pickPhysicalDevice()) {
 			initLogicalDevice();
 			createSwapchain();
+			createSwapchainImageViews();
 			createCommandPool();
 			createCommandBuffer();
 			createSemaphores();
 			createFences();
+			createDescriptorSetLayouts();
+			createRenderPass();
+			
 		}
 	}
 }
 
 Renderer::~Renderer()
 {
+	if (renderPass != VK_NULL_HANDLE) {
+		vkDestroyRenderPass(device, renderPass, nullptr);
+		renderPass = VK_NULL_HANDLE;
+	}
+	if (globalDescriptorSetLayout != VK_NULL_HANDLE) {
+		vkDestroyDescriptorSetLayout(device, globalDescriptorSetLayout, nullptr);
+		globalDescriptorSetLayout = VK_NULL_HANDLE;
+	}
+	if (materialDescriptorSetLayout != VK_NULL_HANDLE) {
+		vkDestroyDescriptorSetLayout(device, materialDescriptorSetLayout, nullptr);
+		materialDescriptorSetLayout = VK_NULL_HANDLE;
+	}
 	if (inFlightFence != VK_NULL_HANDLE) {
 		vkDestroyFence(device, inFlightFence, nullptr);
 		inFlightFence = VK_NULL_HANDLE;
@@ -56,6 +73,12 @@ Renderer::~Renderer()
 	if (commandPool != VK_NULL_HANDLE) {
 		vkDestroyCommandPool(device, commandPool, nullptr);
 		commandPool = VK_NULL_HANDLE;
+	}
+	if (!swapchainImageViews.empty()) {
+		for (auto imageView : swapchainImageViews) {
+			vkDestroyImageView(device, imageView, nullptr);
+		}
+		swapchainImageViews.clear();
 	}
 	if (swapchain != VK_NULL_HANDLE) {
 		vkDestroySwapchainKHR(device, swapchain, nullptr);
@@ -123,13 +146,14 @@ bool Renderer::initialize(SDL_Window* window)
 		extensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
 	}
 
+
 	VkApplicationInfo appInfo{};
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 	appInfo.pApplicationName = "Lights Please";
 	appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
 	appInfo.pEngineName = "No Engine";
 	appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-	appInfo.apiVersion = VK_API_VERSION_1_0;
+	appInfo.apiVersion = VK_API_VERSION_1_2;
 
 	// fill out the Instance Info
     VkInstanceCreateInfo createInfo{};
@@ -286,6 +310,7 @@ void Renderer::initLogicalDevice() {
 
 	}
 	extensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+	extensions.push_back(VK_KHR_CREATE_RENDERPASS_2_EXTENSION_NAME);
 
 
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -422,6 +447,13 @@ bool Renderer::createSwapchain() {
 		return false;
 	}
 	LOG_INFO("VULKAN", "Swapchain created successfully");
+	
+	// Retrieve swapchain images
+	uint32_t swapchainImageCount = 0;
+	vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, nullptr);
+	swapchainImages.resize(swapchainImageCount);
+	vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, swapchainImages.data());
+	swapchainImageFormat = swapchainCreateInfo.imageFormat;
 	
 	return true;
 }
@@ -672,4 +704,146 @@ void Renderer::createFences() {
 	} else {
 		LOG_INFO("VULKAN", "Fence created successfully!");
 	}
+}
+
+
+bool Renderer::createRenderPass() {
+
+	LOG_INFO("RENDER_PASS", "Creating color attachment");
+
+	VkAttachmentDescription2 colorAttachment{};
+	colorAttachment.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2;
+	colorAttachment.format = swapchainImageFormat; // TODO: needs to be created
+	colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+	colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE; // keep the rendered contents
+	// TODO: we don't care about stencil for now, when should we?
+	colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+	
+
+	// subpass(es) and references
+	VkAttachmentReference2 colorAttachmentRef{};
+	colorAttachmentRef.sType = VK_STRUCTURE_TYPE_ATTACHMENT_REFERENCE_2;
+	colorAttachmentRef.attachment = 0; // index in the attachment descriptions array
+	colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	LOG_INFO("RENDER_PASS", "Creating subpass");
+
+
+	VkSubpassDescription2 subpass{};
+	subpass.sType = VK_STRUCTURE_TYPE_SUBPASS_DESCRIPTION_2;
+	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpass.colorAttachmentCount = 1;
+	subpass.pColorAttachments = &colorAttachmentRef;
+
+	LOG_INFO("RENDER_PASS", "Creating render pass");
+	
+	VkRenderPassCreateInfo2 renderPassInfo{};
+	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO_2;
+	renderPassInfo.attachmentCount = 1;
+	renderPassInfo.pAttachments = &colorAttachment;
+	renderPassInfo.subpassCount = 1;
+	renderPassInfo.pSubpasses = &subpass;
+	renderPassInfo.dependencyCount = 0;
+	renderPassInfo.pDependencies = nullptr;
+	renderPassInfo.pNext = nullptr;
+
+	LOG_INFO("RENDER_PASS", "Render pass info created, creating render pass now");
+
+	if (vkGetDeviceProcAddr(device, "vkCreateRenderPass2KHR") == nullptr) {
+		LOG_ERR("RENDER_PASS", "vkCreateRenderPass2 function not found!");
+		return false;
+	}
+
+	// MoltenVK things here
+	PFN_vkCreateRenderPass2KHR fpCreateRenderPass2KHR = nullptr;
+	fpCreateRenderPass2KHR =
+		(PFN_vkCreateRenderPass2KHR)
+		vkGetDeviceProcAddr(device, "vkCreateRenderPass2KHR");
+
+
+	if (fpCreateRenderPass2KHR(device, &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS) {
+		LOG_ERR("VULKAN", "Failed to create render pass!");
+		return false;
+	}
+
+	LOG_INFO("VULKAN", "Render pass created successfully");
+
+	return true;
+}
+
+
+void Renderer::createDescriptorSetLayouts() {
+	// Global Descriptor Set Layout
+	VkDescriptorSetLayoutBinding globalBinding{};
+	globalBinding.binding = 0;
+	globalBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	globalBinding.descriptorCount = 1;
+	globalBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+	globalBinding.pImmutableSamplers = nullptr;
+
+	VkDescriptorSetLayoutCreateInfo globalLayoutInfo{};
+	globalLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	globalLayoutInfo.bindingCount = 1;
+	globalLayoutInfo.pBindings = &globalBinding;
+
+	if (vkCreateDescriptorSetLayout(device, &globalLayoutInfo, nullptr, &globalDescriptorSetLayout) != VK_SUCCESS) {
+		LOG_ERR("VULKAN", "Failed to create global descriptor set layout!");
+	} else {
+		LOG_INFO("VULKAN", "Global descriptor set layout created successfully!");
+	}
+
+	// Material Descriptor Set Layout
+	VkDescriptorSetLayoutBinding materialBinding{};
+	materialBinding.binding = 0;
+	materialBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	materialBinding.descriptorCount = 1;
+	materialBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	materialBinding.pImmutableSamplers = nullptr;
+
+	VkDescriptorSetLayoutCreateInfo materialLayoutInfo{};
+	materialLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	materialLayoutInfo.bindingCount = 1;
+	materialLayoutInfo.pBindings = &materialBinding;
+
+	if (vkCreateDescriptorSetLayout(device, &materialLayoutInfo, nullptr, &materialDescriptorSetLayout) != VK_SUCCESS) {
+		LOG_ERR("VULKAN", "Failed to create material descriptor set layout!");
+	} else {
+		LOG_INFO("VULKAN", "Material descriptor set layout created successfully!");
+	}
+}
+
+
+bool Renderer::createSwapchainImageViews() {
+	swapchainImageViews.resize(swapchainImages.size());	
+
+	for (size_t i = 0; i < swapchainImages.size(); i++) {
+		VkImageViewCreateInfo viewInfo{};
+		viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		viewInfo.image = swapchainImages[i];
+		viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		viewInfo.format = swapchainImageFormat;
+		viewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+		viewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+		viewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+		viewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+		viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		viewInfo.subresourceRange.baseMipLevel = 0;
+		viewInfo.subresourceRange.levelCount = 1;
+		viewInfo.subresourceRange.baseArrayLayer = 0;
+		viewInfo.subresourceRange.layerCount = 1;
+
+		if (vkCreateImageView(device, &viewInfo, nullptr, &swapchainImageViews[i]) != VK_SUCCESS) {
+			LOG_ERR("VULKAN", "Failed to create image views!");
+			return false;
+		}
+	}
+
+	LOG_INFO("SWAPCHAIN IMAGEVIEWS", "Created {} swapchain image views successfully", swapchainImageViews.size());
+
+	return true;
 }
