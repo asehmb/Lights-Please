@@ -3,8 +3,10 @@
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
 #include "pipeline.h"
-#define VMA_IMPLEMENTATION
-#include "vk_mem_alloc.h"
+#ifndef VMA_INCLUDE_ONLY
+#define VMA_INCLUDE_ONLY
+#endif
+#include "external/vk_mem_alloc.h"
 
 class Material {
 public:

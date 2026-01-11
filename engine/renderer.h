@@ -1,5 +1,6 @@
 #pragma once
 
+
 #include <SDL.h>
 #include <cstdint>
 #include <vulkan/vulkan.h>
@@ -7,10 +8,17 @@
 #include <optional>
 #include <vulkan/vulkan_core.h>
 #include <memory>
+#include "material.hpp"
+#include "mesh.h"
 #include "pipeline.h"
 
 class Renderer {
 public:
+    struct Drawable { // small struct to hold a mesh and its material
+        Mesh* mesh;
+        Material* material;
+    };
+
     struct QueueFamilyIndices {
         std::optional<uint32_t> graphicsFamily;
         std::optional<uint32_t> presentFamily;
@@ -34,6 +42,21 @@ public:
     void endFrame();
     void drawTriangle();
 
+    void addDrawable(const Drawable& drawable) {
+        drawables.push_back(drawable);
+    }
+
+    Drawable& getDrawable(size_t index) {
+        return drawables[index];
+    }
+
+    Drawable createDrawable(Mesh* mesh, Material* material) {
+        Drawable drawable{mesh, material};
+        drawables.push_back(drawable);
+        return drawable;
+    }
+    void drawFrame();
+
 private:
     VkInstance instance{VK_NULL_HANDLE};
     VkSurfaceKHR surface{VK_NULL_HANDLE};
@@ -48,21 +71,30 @@ private:
     VkCommandBuffer commandBuffer{VK_NULL_HANDLE};
     VkRenderPass renderPass{VK_NULL_HANDLE};
     VkExtent2D swapchainExtent{};
+    VkQueue graphicsQueue;
+    VkQueue presentQueue;
+    QueueFamilyIndices queueFamilyIndices;
     
-    // Swapchain framebuffers and synchronization
+    // Swapchain framebuffers 
     std::vector<VkImage> swapchainImages;
     std::vector<VkImageView> swapchainImageViews;
     std::vector<VkFramebuffer> framebuffers;
+    uint32_t imageCount{2}; // Double buffering
+
+    // Synchronization objects
     VkSemaphore imageAvailableSemaphore{VK_NULL_HANDLE};
     VkSemaphore renderFinishedSemaphore{VK_NULL_HANDLE};
     VkFence inFlightFence{VK_NULL_HANDLE};
     uint32_t currentFrame = 0;
 
+
     VkRenderingAttachmentInfo colorAttachmentInfo{};
     
     std::unique_ptr<GraphicPipeline> meshPipeline;
     
-    
+    std::vector<Drawable> drawables;
+
+
     void initLogicalDevice();
     bool createSwapchain();
     bool pickPhysicalDevice();
@@ -76,9 +108,26 @@ private:
     bool createFramebuffers();
     bool createSyncObjects();
 
-    void drawFrame();
+    void drawMesh(VkCommandBuffer commandBuffer, Mesh* mesh);
 
-    void pipelineBarrier(VkCommandBuffer commandBuffer,
+    void createSemaphores();
+    void createFences();
+
+    // TODO: refactor to use this structure for frame data
+    //     struct FrameData {
+    //     VkCommandPool commandPool;
+    //     VkCommandBuffer commandBuffer;
+
+    //     VkSemaphore swapchainSemaphore; // "Image Available"
+    //     VkSemaphore renderSemaphore;    // "Render Finished"
+
+    //     VkFence renderFence;
+    // };
+
+    // std::array<FrameData, 2> _frames;
+    // int _frameNumber{0}; 
+
+    void transitionImage(VkCommandBuffer commandBuffer,
                          VkImage image,
                          VkImageLayout oldLayout,
                          VkImageLayout newLayout,

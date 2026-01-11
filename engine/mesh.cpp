@@ -1,3 +1,5 @@
+#define VMA_IMPLEMENTATION
+#include "external/vk_mem_alloc.h"
 
 #include "mesh.h"
 #include "logger.h"
@@ -351,3 +353,4 @@ Mesh Mesh::createPrimitive(VkDevice device, VmaAllocator allocator, PrimitiveTyp
             return createTriangle(device, allocator);
     }
 }
+

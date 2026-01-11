@@ -15,6 +15,8 @@ void Engine::initialize() {
 
     // create renderer from platform window
     renderer = std::make_unique<Renderer>(platform::get_window_ptr());
+
+    LOG_INFO("ENGINE", "Engine initialized with {} threads", thread_count);
 }
 
 Engine::~Engine() {
@@ -27,6 +29,7 @@ void Engine::run() {
     using clock = std::chrono::high_resolution_clock;
     auto last_time = clock::now();
     float accumulator = 0.0f;
+    const float dt = 1.0f / 60.0f; // Fixed timestep of 60 FPS
 
     while (is_running) {
         auto current_time = clock::now();

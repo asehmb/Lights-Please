@@ -24,7 +24,15 @@ target_link_libraries(Lights_Please PRIVATE
     Vulkan::Vulkan
 )
 
-# Add VMA header from external directory as SYSTEM to suppress warnings
+# Add external headers as SYSTEM to suppress warnings
 target_include_directories(Lights_Please SYSTEM PRIVATE 
     "${CMAKE_CURRENT_SOURCE_DIR}/engine/external"
 )
+
+# Suppress warnings for external headers specifically
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+    target_compile_options(Lights_Please PRIVATE
+        -Wno-nullability-completeness
+        -Wno-nullability-extension
+    )
+endif()

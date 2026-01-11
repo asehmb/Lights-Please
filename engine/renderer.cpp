@@ -29,12 +29,30 @@ Renderer::Renderer(SDL_Window* window)
 			createSwapchain();
 			createCommandPool();
 			createCommandBuffer();
+			createSemaphores();
+			createFences();
 		}
 	}
 }
 
 Renderer::~Renderer()
 {
+	if (inFlightFence != VK_NULL_HANDLE) {
+		vkDestroyFence(device, inFlightFence, nullptr);
+		inFlightFence = VK_NULL_HANDLE;
+	}
+	if (renderFinishedSemaphore != VK_NULL_HANDLE) {
+		vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
+		renderFinishedSemaphore = VK_NULL_HANDLE;
+	}
+	if (imageAvailableSemaphore != VK_NULL_HANDLE) {
+		vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
+		imageAvailableSemaphore = VK_NULL_HANDLE;
+	}
+	if (commandBuffer != VK_NULL_HANDLE) {
+		vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
+		commandBuffer = VK_NULL_HANDLE;
+	}
 	if (commandPool != VK_NULL_HANDLE) {
 		vkDestroyCommandPool(device, commandPool, nullptr);
 		commandPool = VK_NULL_HANDLE;
@@ -278,6 +296,9 @@ void Renderer::initLogicalDevice() {
 
 
 	if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) == VK_SUCCESS) {
+
+		vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
+		vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &presentQueue);
 		LOG_INFO("VULKAN", "Logical device created successfully");
 	} else {
 		LOG_ERR("VULKAN", "Failed to create logical device!");
@@ -456,7 +477,7 @@ bool Renderer::createCommandBuffer() {
 void Renderer::recordCommandBuffer(uint32_t imageIndex) {
 	VkCommandBufferBeginInfo beginInfo{};
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	beginInfo.flags = 0; // Optional
+	beginInfo.flags = 0;
 	beginInfo.pInheritanceInfo = nullptr; // Optional
 
 	if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
@@ -465,7 +486,7 @@ void Renderer::recordCommandBuffer(uint32_t imageIndex) {
 	}
 
 
-	pipelineBarrier(commandBuffer, swapchainImages[imageIndex],
+	transitionImage(commandBuffer, swapchainImages[imageIndex],
 		 	VK_IMAGE_LAYOUT_UNDEFINED,
 			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
@@ -484,14 +505,33 @@ void Renderer::recordCommandBuffer(uint32_t imageIndex) {
 
 	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
+	GraphicPipeline* currentPipeline = nullptr;
+
 	// TODO: Set viewports and scissors here
 
 	// TODO: Add drawing commands here
-	// vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
-	// vkCmdDraw(commandBuffer, vertexCount, instanceCount, firstVertex, firstInstance);
+
+	for (const auto& drawable : drawables) {
+		if (currentPipeline != drawable.material->pipeline.get()) {
+			currentPipeline = drawable.material->pipeline.get();
+			currentPipeline->bind(commandBuffer);
+		}
+		// Bind descriptor sets, vertex buffers, index buffers, etc. here as needed
+		// drawable.mesh->bind(commandBuffer);
+		// vkCmdDrawIndexed(commandBuffer, drawable.mesh->getIndexCount(), 1, 0, 0, 0);
+		drawMesh(commandBuffer, drawable.mesh);
+	}
 	
 	vkCmdEndRenderPass(commandBuffer);
 
+	transitionImage(commandBuffer, swapchainImages[imageIndex],
+			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+			VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+			VK_ACCESS_MEMORY_READ_BIT
+	);
 
 	vkEndCommandBuffer(commandBuffer);
 }
@@ -521,33 +561,50 @@ std::unique_ptr<GraphicPipeline> Renderer::createOpaquePipeline(const char* vert
 void Renderer::drawFrame() {
 	
 	// wait for previous frame
-	// TODO: where are fences created?
 	vkWaitForFences(device, 1, &inFlightFence, VK_TRUE, UINT64_MAX);
 	vkResetFences(device, 1, &inFlightFence);
 
 	// Get next image from swapchain
 	uint32_t imageIndex;
-	// TODO: where is imageAvailableSemaphore created?
 	VkResult result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX,
 		imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
 
 	recordCommandBuffer(imageIndex);
+
+	// Submit command buffer
+	VkSubmitInfo submitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	VkSemaphore waitSemaphores[] = { imageAvailableSemaphore };
+	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+	submitInfo.waitSemaphoreCount = 1;
+	submitInfo.pWaitSemaphores = waitSemaphores;
+	submitInfo.pWaitDstStageMask = waitStages;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &commandBuffer;
+	VkSemaphore signalSemaphores[] = { renderFinishedSemaphore };
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pSignalSemaphores = signalSemaphores;
+
+	if (vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFence) != VK_SUCCESS) {
+		LOG_ERR("VULKAN", "Failed to submit draw command buffer!");
+		return;
+	}
 }
 
 // Pipeline Barrier helper function.
 // Examples oldLayout/newLayout usage:
 // Start Frame -- UNDEFINED, 	COLOR_ATTACHMENT_OPTIMAL -- Clears old junk; ready to paint.
 // End Frame -- COLOR_ATTACHMENT_OPTIMAL, PRESENT_SRC_KHR -- Hands the "painting" to the monitor.
-// Upload Texture -- TRANSFER_DST_OPTIMAL, SHADER_READ_ONLY_OPTIMAL -- Moved from CPU to GPU; now shaders can see it
+// Upload Texture -- TRANSFER_DST_OPTIMAL, SHADER_READ_ONLY_OPTIMAL -- Moved from CPU to GPU; now shaders can see it.
 // Examples srcAccessMask/dstAccessMask usage:
-// Start Frame -- 0, COLOR_ATTACHMENT_WRITE_BIT
-// End Frame -- COLOR_ATTACHMENT_WRITE_BIT, MEMORY_READ_BIT
-// Upload Texture -- TRANSFER_WRITE_BIT, SHADER_READ_BIT
+// Start Frame -- 0, COLOR_ATTACHMENT_WRITE_BIT.
+// End Frame -- COLOR_ATTACHMENT_WRITE_BIT, MEMORY_READ_BIT.
+// Upload Texture -- TRANSFER_WRITE_BIT, SHADER_READ_BIT.
 // Examples srcStageMask/dstStageMask usage:
-// Start Frame -- TOP_OF_PIPE_BIT, COLOR_ATTACHMENT_OUTPUT_BIT
-// End Frame -- COLOR_ATTACHMENT_OUTPUT_BIT, BOTTOM_OF_PIPE_BIT
-// Upload Texture -- TRANSFER_BIT, FRAGMENT_SHADER_BIT
-void Renderer::pipelineBarrier(VkCommandBuffer commandBuffer,
+// Start Frame -- TOP_OF_PIPE_BIT, COLOR_ATTACHMENT_OUTPUT_BIT.
+// End Frame -- COLOR_ATTACHMENT_OUTPUT_BIT, BOTTOM_OF_PIPE_BIT.
+// Upload Texture -- TRANSFER_BIT, FRAGMENT_SHADER_BIT.
+void Renderer::transitionImage(VkCommandBuffer commandBuffer,
 						 VkImage image,
 						 VkImageLayout oldLayout,
 						 VkImageLayout newLayout,
@@ -579,4 +636,40 @@ void Renderer::pipelineBarrier(VkCommandBuffer commandBuffer,
 		commandBuffer,
 		&dependencyInfo
 	);
+}
+
+void Renderer::drawMesh(VkCommandBuffer commandBuffer, Mesh* mesh) {
+
+	// bind vertex and index buffers
+	mesh->bind(commandBuffer);
+	
+	// draw call
+	mesh->draw(commandBuffer);
+
+}
+
+void Renderer::createSemaphores() {
+	// Create semaphores for image availability and render finished
+	VkSemaphoreCreateInfo semaphoreInfo{};
+	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+	if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphore) != VK_SUCCESS ||
+		vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphore) != VK_SUCCESS) {
+		LOG_ERR("VULKAN", "Failed to create semaphores!");
+	} else {
+		LOG_INFO("VULKAN", "Semaphores created successfully!");
+	}
+}
+
+void Renderer::createFences() {
+	// Create fence for in-flight frame
+	VkFenceCreateInfo fenceInfo{};
+	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT; // Start signaled so we don't wait on first frame
+
+	if (vkCreateFence(device, &fenceInfo, nullptr, &inFlightFence) != VK_SUCCESS) {
+		LOG_ERR("VULKAN", "Failed to create fence!");
+	} else {
+		LOG_INFO("VULKAN", "Fence created successfully!");
+	}
 }
