@@ -181,8 +181,8 @@ void Mesh::calculateBounds(const std::vector<Vertex>& vertices) {
         return;
     }
     
-    glm::vec3 min = vertices[0].pos;
-    glm::vec3 max = vertices[0].pos;
+    Vector3 min = vertices[0].pos;
+    Vector3 max = vertices[0].pos;
     
     for (const auto& vertex : vertices) {
         min.x = std::min(min.x, vertex.pos.x);

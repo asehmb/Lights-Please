@@ -2,14 +2,13 @@
 
 #include <vulkan/vulkan.h>
 #include <array>
-#include <glm/glm.hpp>
-
+#include "math/vector.hpp"
 
 struct Vertex {
-    glm::vec3 pos;     // Position
-    glm::vec3 colour;  // Colour
-    glm::vec3 normal;  // Normal
-    glm::vec2 uv;      // Texture Coordinates
+    Vector3 pos;     // Position
+    Vector3 colour;  // Colour
+    Vector3 normal;  // Normal
+    Vector2 uv;      // Texture Coordinates
 
     static VkVertexInputBindingDescription getBindingDescription() {
         VkVertexInputBindingDescription bindingDescription{};

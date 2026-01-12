@@ -8,7 +8,6 @@
 #define VMA_INCLUDE_ONLY
 #endif
 #include "external/vk_mem_alloc.h"
-#include <glm/glm.hpp>
 
 enum class PrimitiveType {
     Quad,
@@ -18,14 +17,14 @@ enum class PrimitiveType {
 };
 
 struct BoundingBox {
-    glm::vec3 min;
-    glm::vec3 max;
+    Vector3 min;
+    Vector3 max;
     
     BoundingBox() : min(0, 0, 0), max(0, 0, 0) {}
-    BoundingBox(const glm::vec3& minPoint, const glm::vec3& maxPoint) : min(minPoint), max(maxPoint) {}
+    BoundingBox(const Vector3& minPoint, const Vector3& maxPoint) : min(minPoint), max(maxPoint) {}
     
-    glm::vec3 getCenter() const { return (min + max) * 0.5f; }
-    glm::vec3 getSize() const { return max - min; }
+    Vector3 getCenter() const { return (min + max) * 0.5f; }
+    Vector3 getSize() const { return max - min; }
 };
 
 class Mesh {
