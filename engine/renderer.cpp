@@ -48,7 +48,6 @@ Renderer::~Renderer()
 			// No dynamic memory to free in Drawable, just clear the vector
 			drawable.mesh = nullptr;
 			drawable.material = nullptr;
-			vkDestroyPipelineLayout(device, drawable.material->pipelineLayout, nullptr);
 		}
 		drawables.clear();
 	}

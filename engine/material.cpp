@@ -13,6 +13,10 @@ Material::Material(VkDevice device, VmaAllocator allocator, DescriptorLayouts& d
 
 Material::~Material() {
     // Cleanup if needed
+    if (pipelineLayout != VK_NULL_HANDLE) {
+        vkDestroyPipelineLayout(m_device, pipelineLayout, nullptr);
+        pipelineLayout = VK_NULL_HANDLE;
+    }
 }
 
 void Material::createPipelineLayout(DescriptorLayouts& descriptorLayouts) {
