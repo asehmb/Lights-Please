@@ -1,14 +1,15 @@
 #pragma once
 
-#include "math/vector.hpp"
 #include <vulkan/vulkan.h>
 #include <array>
+#include <glm/glm.hpp>
+
 
 struct Vertex {
-    Vector3 pos; // pos 1
-    Vector3 colour; // pos 2
-    Vector3 normal; // pos 3
-    Vector2 uv; // pos 4
+    glm::vec3 pos;     // Position
+    glm::vec3 colour;  // Colour
+    glm::vec3 normal;  // Normal
+    glm::vec2 uv;      // Texture Coordinates
 
     static VkVertexInputBindingDescription getBindingDescription() {
         VkVertexInputBindingDescription bindingDescription{};

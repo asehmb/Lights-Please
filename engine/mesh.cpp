@@ -1,4 +1,3 @@
-#define VMA_IMPLEMENTATION
 #include "external/vk_mem_alloc.h"
 
 #include "mesh.h"
@@ -10,27 +9,67 @@
 #include <cmath>
 
 
-Mesh::Mesh(VkDevice device, VmaAllocator allocator, const MeshData& data)
-    : m_device(device), m_allocator(allocator), m_vertexBuffer(VK_NULL_HANDLE), 
-      m_indexBuffer(VK_NULL_HANDLE), m_vertexAllocation(VK_NULL_HANDLE), 
-      m_indexAllocation(VK_NULL_HANDLE), m_vertexCount(0), m_indexCount(0) {
+Mesh::Mesh(VkDevice device, VmaAllocator allocator, VkCommandPool commandPool, VkQueue graphicsQueue, const MeshData& data)
+    : m_device(device), m_allocator(allocator), m_commandPool(commandPool), m_graphicsQueue(graphicsQueue),
+      m_vertexBuffer(VK_NULL_HANDLE), m_indexBuffer(VK_NULL_HANDLE), 
+      m_vertexAllocation(VK_NULL_HANDLE), m_indexAllocation(VK_NULL_HANDLE), 
+      m_vertexCount(0), m_indexCount(0) {
     
     if (!data.vertices.empty()) {
         createVertexBuffer(data.vertices);
         calculateBounds(data.vertices);
         m_vertexCount = static_cast<uint32_t>(data.vertices.size());
-    }
-    
-    if (!data.indices.empty()) {
         createIndexBuffer(data.indices);
         m_indexCount = static_cast<uint32_t>(data.indices.size());
+        LOG_INFO("MESH", "Created mesh with {} vertices, {} indices", m_vertexCount, m_indexCount);
     }
     
-    LOG_INFO("MESH", "Created mesh with {} vertices, {} indices", m_vertexCount, m_indexCount);
 }
 
 Mesh::~Mesh() {
     cleanup();
+}
+
+Mesh& Mesh::operator=(Mesh&& other) noexcept {
+    if (this != &other) {
+        cleanup(); // Clean up existing resources in 'this'
+
+        m_device = other.m_device;
+        m_allocator = other.m_allocator;
+        m_vertexBuffer = other.m_vertexBuffer;
+        m_indexBuffer = other.m_indexBuffer;
+        m_vertexAllocation = other.m_vertexAllocation;
+        m_indexAllocation = other.m_indexAllocation;
+        m_vertexCount = other.m_vertexCount;
+        m_indexCount = other.m_indexCount;
+
+        other.m_vertexBuffer = VK_NULL_HANDLE;
+        other.m_indexBuffer = VK_NULL_HANDLE;
+        other.m_vertexAllocation = VK_NULL_HANDLE;
+        other.m_indexAllocation = VK_NULL_HANDLE;
+    }
+    return *this;
+}
+
+Mesh::Mesh(Mesh&& other) noexcept {
+    // Transfer ownership of handles
+    this->m_vertexBuffer = other.m_vertexBuffer;
+    this->m_indexBuffer = other.m_indexBuffer;
+    this->m_vertexAllocation = other.m_vertexAllocation;
+    this->m_indexAllocation = other.m_indexAllocation;
+    this->m_device = other.m_device;
+    this->m_allocator = other.m_allocator;
+    this->m_commandPool = other.m_commandPool;
+    this->m_graphicsQueue = other.m_graphicsQueue;
+    this->m_vertexCount = other.m_vertexCount;
+    this->m_indexCount = other.m_indexCount;
+    this->m_bounds = other.m_bounds;
+
+    // "Null out" the source object so its destructor does nothing
+    other.m_vertexBuffer = VK_NULL_HANDLE;
+    other.m_indexBuffer = VK_NULL_HANDLE;
+    other.m_vertexAllocation = VK_NULL_HANDLE;
+    other.m_indexAllocation = VK_NULL_HANDLE;
 }
 
 void Mesh::cleanup() {
@@ -85,10 +124,11 @@ void Mesh::createVertexBuffer(const std::vector<Vertex>& vertices) {
                     &m_vertexBuffer, &m_vertexAllocation, nullptr);
     
     // Copy from staging buffer to vertex buffer
-    copyBuffer(stagingBuffer, m_vertexBuffer, bufferSize);
+    copyBuffer(stagingBuffer, m_vertexBuffer, bufferSize, m_commandPool, m_graphicsQueue, m_device);
     
     // Cleanup staging buffer
     vmaDestroyBuffer(m_allocator, stagingBuffer, stagingAllocation);
+    LOG_INFO("MESH_VB", "Created Vertex buffer succesfully");
 }
 
 void Mesh::createIndexBuffer(const std::vector<uint32_t>& indices) {
@@ -129,7 +169,7 @@ void Mesh::createIndexBuffer(const std::vector<uint32_t>& indices) {
                     &m_indexBuffer, &m_indexAllocation, nullptr);
     
     // Copy from staging buffer to index buffer
-    copyBuffer(stagingBuffer, m_indexBuffer, bufferSize);
+    copyBuffer(stagingBuffer, m_indexBuffer, bufferSize, m_commandPool, m_graphicsQueue, m_device);
     
     // Cleanup staging buffer
     vmaDestroyBuffer(m_allocator, stagingBuffer, stagingAllocation);
@@ -141,8 +181,8 @@ void Mesh::calculateBounds(const std::vector<Vertex>& vertices) {
         return;
     }
     
-    Vector3 min = vertices[0].pos;
-    Vector3 max = vertices[0].pos;
+    glm::vec3 min = vertices[0].pos;
+    glm::vec3 max = vertices[0].pos;
     
     for (const auto& vertex : vertices) {
         min.x = std::min(min.x, vertex.pos.x);
@@ -157,15 +197,98 @@ void Mesh::calculateBounds(const std::vector<Vertex>& vertices) {
     m_bounds = BoundingBox(min, max);
 }
 
-void Mesh::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
-    // For now, this is a simplified version - in a real implementation,
-    // you'd want to use a command pool and queue for transfers
-    LOG_WARN("MESH", "copyBuffer not fully implemented - needs command buffer setup");
-    // TODO: Implement proper buffer copying with command buffers
+void Mesh::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size, 
+        VkCommandPool commandPool, VkQueue graphicsQueue, VkDevice device) {
+    
+    // Validate input parameters
+    if (srcBuffer == VK_NULL_HANDLE || dstBuffer == VK_NULL_HANDLE || size == 0) {
+        LOG_ERR("MESH", "copyBuffer: Invalid buffer handles or size");
+        return;
+    }
+
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandPool = commandPool;
+    allocInfo.commandBufferCount = 1;
+
+    VkCommandBuffer cmd;
+    VkResult result = vkAllocateCommandBuffers(device, &allocInfo, &cmd);
+    if (result != VK_SUCCESS) {
+        LOG_ERR("MESH", "copyBuffer: Failed to allocate command buffer: {}", static_cast<int>(result));
+        return;
+    }
+
+    // Create a fence for synchronization
+    VkFenceCreateInfo fenceInfo{};
+    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fenceInfo.flags = 0; // Start unsignaled
+    
+    VkFence copyFence;
+    result = vkCreateFence(device, &fenceInfo, nullptr, &copyFence);
+    if (result != VK_SUCCESS) {
+        LOG_ERR("MESH", "copyBuffer: Failed to create fence: {}", static_cast<int>(result));
+        vkFreeCommandBuffers(device, commandPool, 1, &cmd);
+        return;
+    }
+
+    // Begin recording
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    result = vkBeginCommandBuffer(cmd, &beginInfo);
+    if (result != VK_SUCCESS) {
+        LOG_ERR("MESH", "copyBuffer: Failed to begin command buffer: {}", static_cast<int>(result));
+        vkDestroyFence(device, copyFence, nullptr);
+        vkFreeCommandBuffers(device, commandPool, 1, &cmd);
+        return;
+    }
+
+    // Copy region
+    VkBufferCopy copyRegion{};
+    copyRegion.srcOffset = 0;
+    copyRegion.dstOffset = 0;
+    copyRegion.size = size;
+    vkCmdCopyBuffer(cmd, srcBuffer, dstBuffer, 1, &copyRegion);
+
+    result = vkEndCommandBuffer(cmd);
+    if (result != VK_SUCCESS) {
+        LOG_ERR("MESH", "copyBuffer: Failed to end command buffer: {}", static_cast<int>(result));
+        vkDestroyFence(device, copyFence, nullptr);
+        vkFreeCommandBuffers(device, commandPool, 1, &cmd);
+        return;
+    }
+
+    // Submit with fence
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &cmd;
+
+    result = vkQueueSubmit(graphicsQueue, 1, &submitInfo, copyFence);
+    if (result != VK_SUCCESS) {
+        LOG_ERR("MESH", "copyBuffer: Failed to submit command buffer: {}", static_cast<int>(result));
+        vkDestroyFence(device, copyFence, nullptr);
+        vkFreeCommandBuffers(device, commandPool, 1, &cmd);
+        return;
+    }
+
+    // Wait for completion with fence
+    result = vkWaitForFences(device, 1, &copyFence, VK_TRUE, UINT64_MAX);
+    if (result != VK_SUCCESS) {
+        LOG_ERR("MESH", "copyBuffer: Failed to wait for fence: {}", static_cast<int>(result));
+    }
+
+    // Cleanup
+    vkDestroyFence(device, copyFence, nullptr);
+    vkFreeCommandBuffers(device, commandPool, 1, &cmd);
+
+    LOG_INFO("MESH", "Buffer copy completed successfully");
 }
 
 void Mesh::bind(VkCommandBuffer cmd) {
-    VkBuffer vertexBuffers[] = { m_vertexBuffer };
+    VkBuffer *vertexBuffers = &m_vertexBuffer;
     VkDeviceSize offsets[] = { 0 };
     vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
     
@@ -223,7 +346,7 @@ void Mesh::updateIndices(const std::vector<uint32_t>& newIndices) {
 }
 
 // Static factory methods
-Mesh Mesh::createQuad(VkDevice device, VmaAllocator allocator) {
+Mesh Mesh::createQuad(VkDevice device, VmaAllocator allocator, VkCommandPool commandPool, VkQueue graphicsQueue) {
     MeshData data;
     data.vertices = {
         {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}}, // bottom-left
@@ -234,10 +357,10 @@ Mesh Mesh::createQuad(VkDevice device, VmaAllocator allocator) {
     
     data.indices = { 0, 1, 2, 2, 3, 0 };
     
-    return Mesh(device, allocator, data);
+    return Mesh(device, allocator, commandPool, graphicsQueue, data);
 }
 
-Mesh Mesh::createTriangle(VkDevice device, VmaAllocator allocator) {
+Mesh Mesh::createTriangle(VkDevice device, VmaAllocator allocator, VkCommandPool commandPool, VkQueue graphicsQueue) {
     MeshData data;
     data.vertices = {
         {{ 0.0f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.5f, 0.0f}}, // bottom
@@ -247,10 +370,10 @@ Mesh Mesh::createTriangle(VkDevice device, VmaAllocator allocator) {
     
     data.indices = { 0, 1, 2 };
     
-    return Mesh(device, allocator, data);
+    return Mesh(device, allocator, commandPool, graphicsQueue, data);
 }
 
-Mesh Mesh::createCube(VkDevice device, VmaAllocator allocator) {
+Mesh Mesh::createCube(VkDevice device, VmaAllocator allocator, VkCommandPool commandPool, VkQueue graphicsQueue) {
     MeshData data;
     data.vertices = {
         // Front face
@@ -281,10 +404,10 @@ Mesh Mesh::createCube(VkDevice device, VmaAllocator allocator) {
         0, 1, 5, 5, 4, 0
     };
     
-    return Mesh(device, allocator, data);
+    return Mesh(device, allocator, commandPool, graphicsQueue, data);
 }
 
-Mesh Mesh::createSphere(VkDevice device, VmaAllocator allocator, int subdivisions) {
+Mesh Mesh::createSphere(VkDevice device, VmaAllocator allocator, VkCommandPool commandPool, VkQueue graphicsQueue, int subdivisions) {
     MeshData data;
     
     // Simple sphere generation using UV sphere method
@@ -335,22 +458,22 @@ Mesh Mesh::createSphere(VkDevice device, VmaAllocator allocator, int subdivision
         }
     }
     
-    return Mesh(device, allocator, data);
+    return Mesh(device, allocator, commandPool, graphicsQueue, data);
 }
 
-Mesh Mesh::createPrimitive(VkDevice device, VmaAllocator allocator, PrimitiveType type) {
+Mesh Mesh::createPrimitive(VkDevice device, VmaAllocator allocator, VkCommandPool commandPool, VkQueue graphicsQueue, PrimitiveType type) {
     switch (type) {
         case PrimitiveType::Quad:
-            return createQuad(device, allocator);
+            return createQuad(device, allocator, commandPool, graphicsQueue);
         case PrimitiveType::Triangle:
-            return createTriangle(device, allocator);
+            return createTriangle(device, allocator, commandPool, graphicsQueue);
         case PrimitiveType::Cube:
-            return createCube(device, allocator);
+            return createCube(device, allocator, commandPool, graphicsQueue);
         case PrimitiveType::Sphere:
-            return createSphere(device, allocator);
+            return createSphere(device, allocator, commandPool, graphicsQueue);
         default:
             LOG_WARN("MESH", "Unknown primitive type, falling back to triangle");
-            return createTriangle(device, allocator);
+            return createTriangle(device, allocator, commandPool, graphicsQueue);
     }
 }
 

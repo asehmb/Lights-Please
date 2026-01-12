@@ -1,5 +1,7 @@
 #pragma once
 
+#include "vulkan/vulkan_core.h"
+#include <memory>
 #include <vulkan/vulkan.h>
 #include <vector>
 
@@ -26,11 +28,43 @@ struct PipelineBuilder {
 
     void clear() {
         // Reset everything to "Safe Defaults"
-        inputAssembly = { .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
-        rasterizer = { .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
-        colorBlendAttachment = {};
-        multisampling = { .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO };
-        depthStencil = { .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
+        inputAssembly = { 
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+            .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+            .primitiveRestartEnable = VK_FALSE
+        };
+        rasterizer = { 
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+            .depthClampEnable = VK_FALSE,
+            .rasterizerDiscardEnable = VK_FALSE,
+            .polygonMode = VK_POLYGON_MODE_FILL,
+            .cullMode = VK_CULL_MODE_NONE,
+            .frontFace = VK_FRONT_FACE_CLOCKWISE,
+            .depthBiasEnable = VK_FALSE,
+            .lineWidth = 1.0f
+        };
+        colorBlendAttachment = {
+            .blendEnable = VK_FALSE,
+            .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | 
+                             VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
+        };
+        multisampling = { 
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+            .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+            .sampleShadingEnable = VK_FALSE,
+            .minSampleShading = 1.0f,
+            .pSampleMask = nullptr,
+            .alphaToCoverageEnable = VK_FALSE,
+            .alphaToOneEnable = VK_FALSE
+        };
+        depthStencil = { 
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+            .depthTestEnable = VK_FALSE,
+            .depthWriteEnable = VK_FALSE,
+            .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
+            .depthBoundsTestEnable = VK_FALSE,
+            .stencilTestEnable = VK_FALSE
+        };
         renderInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO };
         shaderStages.clear();
     }
@@ -82,6 +116,16 @@ struct PipelineBuilder {
         depthStencil.stencilTestEnable = VK_FALSE;
     }
 
+    void disable_multisampling() {
+        multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+        multisampling.sampleShadingEnable = VK_FALSE;
+        multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+        multisampling.minSampleShading = 1.0f;
+        multisampling.pSampleMask = nullptr;
+        multisampling.alphaToCoverageEnable = VK_FALSE;
+        multisampling.alphaToOneEnable = VK_FALSE;
+    }
+
     // New method to build a GraphicPipeline object
     GraphicPipeline build(VkDevice device, VkRenderPass pass, const char* vertexShaderPath, const char* fragmentShaderPath);
     
@@ -92,14 +136,16 @@ struct PipelineBuilder {
 class GraphicPipeline {
 public:
     GraphicPipeline(VkDevice device,
-                    VkRenderPass renderPass,
-                    VkPipelineLayout pipelineLayout,
-                    const char* vertexShaderPath,
-                    const char* fragmentShaderPath);
+                                    VkRenderPass renderPass,
+                                    const char* vertexShaderPath,
+                                    const char* fragmentShaderPath,
+                                    VkExtent2D swapChainExtent,
+                                    VkPipelineLayout* pipelineLayoutPtr);
     ~GraphicPipeline();
     void bind(VkCommandBuffer cmdBuffer);
     VkPipeline m_pipeline;
-    VkPipelineLayout m_pipelineLayout;
+ 
+    VkShaderModule createShaderModule(VkDevice device, const char* filePath);
 
 private:
     VkDevice m_device;

@@ -8,6 +8,7 @@
 #define VMA_INCLUDE_ONLY
 #endif
 #include "external/vk_mem_alloc.h"
+#include <glm/glm.hpp>
 
 enum class PrimitiveType {
     Quad,
@@ -17,14 +18,14 @@ enum class PrimitiveType {
 };
 
 struct BoundingBox {
-    Vector3 min;
-    Vector3 max;
+    glm::vec3 min;
+    glm::vec3 max;
     
     BoundingBox() : min(0, 0, 0), max(0, 0, 0) {}
-    BoundingBox(const Vector3& minPoint, const Vector3& maxPoint) : min(minPoint), max(maxPoint) {}
+    BoundingBox(const glm::vec3& minPoint, const glm::vec3& maxPoint) : min(minPoint), max(maxPoint) {}
     
-    Vector3 getCenter() const { return (min + max) * 0.5f; }
-    Vector3 getSize() const { return max - min; }
+    glm::vec3 getCenter() const { return (min + max) * 0.5f; }
+    glm::vec3 getSize() const { return max - min; }
 };
 
 class Mesh {
@@ -35,15 +36,25 @@ public:
     };
 
     // Construction
-    Mesh(VkDevice device, VmaAllocator allocator, const MeshData& data);
+    Mesh() = default;
+    Mesh(VkDevice device, VmaAllocator allocator, VkCommandPool commandPool, VkQueue graphicsQueue, const MeshData& data);
     ~Mesh();
 
+    // Define the Move Constructor
+    Mesh(Mesh&& other) noexcept;
+    // Define the Move Assignment Operator
+    Mesh& operator=(Mesh&& other) noexcept;
+
+    // Delete Copying (Vulkan resources shouldn't be copied)
+    Mesh(const Mesh&) = delete;
+    Mesh& operator=(const Mesh&) = delete;
+
     // Static factory methods for primitive creation
-    static Mesh createQuad(VkDevice device, VmaAllocator allocator);
-    static Mesh createCube(VkDevice device, VmaAllocator allocator);
-    static Mesh createSphere(VkDevice device, VmaAllocator allocator, int subdivisions = 16);
-    static Mesh createTriangle(VkDevice device, VmaAllocator allocator);
-    static Mesh createPrimitive(VkDevice device, VmaAllocator allocator, PrimitiveType type);
+    static Mesh createQuad(VkDevice device, VmaAllocator allocator, VkCommandPool commandPool, VkQueue graphicsQueue);
+    static Mesh createCube(VkDevice device, VmaAllocator allocator, VkCommandPool commandPool, VkQueue graphicsQueue);
+    static Mesh createSphere(VkDevice device, VmaAllocator allocator, VkCommandPool commandPool, VkQueue graphicsQueue, int subdivisions = 16);
+    static Mesh createTriangle(VkDevice device, VmaAllocator allocator, VkCommandPool commandPool, VkQueue graphicsQueue);
+    static Mesh createPrimitive(VkDevice device, VmaAllocator allocator, VkCommandPool commandPool, VkQueue graphicsQueue, PrimitiveType type);
 
     // Rendering
     void bind(VkCommandBuffer cmd);
@@ -66,6 +77,8 @@ public:
 private:
     VkDevice m_device;
     VmaAllocator m_allocator;
+    VkCommandPool m_commandPool;
+    VkQueue m_graphicsQueue;
     
     VkBuffer m_vertexBuffer;
     VkBuffer m_indexBuffer;
@@ -80,5 +93,6 @@ private:
     void createVertexBuffer(const std::vector<Vertex>& vertices);
     void createIndexBuffer(const std::vector<uint32_t>& indices);
     void calculateBounds(const std::vector<Vertex>& vertices);
-    void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+    void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size, 
+        VkCommandPool commandPool, VkQueue graphicsQueue, VkDevice device);
 };

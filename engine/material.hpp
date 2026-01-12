@@ -7,6 +7,7 @@
 #define VMA_INCLUDE_ONLY
 #endif
 #include "external/vk_mem_alloc.h"
+#include "descriptor_layout.h"
 
 class Material {
 public:
@@ -21,10 +22,13 @@ public:
         VkRenderPass renderPass;
         uint32_t subpass = 0;
     };
-    Material(VkDevice device, VmaAllocator allocator);
+    Material(VkDevice device, VmaAllocator allocator, DescriptorLayouts& descriptorLayouts);
     ~Material();
 
+    VkPipelineLayout pipelineLayout;
     std::shared_ptr<GraphicPipeline> pipeline;
+    std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
+
 
     // Setters
     void setDiffuseTexture(VkImageView textureView);
@@ -35,10 +39,14 @@ public:
     VkImageView getDiffuseTexture() const { return m_diffuseTexture; }
     VkImageView getSpecularTexture() const { return m_specularTexture; }
     VkImageView getNormalTexture() const { return m_normalTexture; }
+    void createPipelineLayout(DescriptorLayouts& descriptorLayouts);
+    
 private:
     VkDevice m_device;
     VmaAllocator m_allocator;
     VkImageView m_diffuseTexture;
     VkImageView m_specularTexture;
     VkImageView m_normalTexture;
+
+
 };

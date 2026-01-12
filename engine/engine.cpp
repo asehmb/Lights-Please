@@ -1,5 +1,7 @@
 #include "engine.h"
 #include "logger.h"
+#include "mesh.h"
+#include "pipeline.h"
 #include "platform.h"
 #include <chrono>
 
@@ -14,7 +16,34 @@ void Engine::initialize() {
 
 
     // create renderer from platform window
+
     renderer = std::make_unique<Renderer>(platform::get_window_ptr());
+    // renderer->createTriangleDrawable();
+    
+    triangleMaterial = std::make_unique<Material>(
+        renderer->getVulkanDevice(),
+        renderer->getVmaAllocator(),
+        renderer->getDescriptorLayouts()
+    );
+    trianglePipeline = std::make_shared<GraphicPipeline>(
+        renderer->getVulkanDevice(),
+        renderer->getRenderPass(),
+        "shaders/triangle.vert.spv",
+        "shaders/triangle.frag.spv",
+        renderer->getSwapChainExtent(),
+        &triangleMaterial->pipelineLayout
+    );
+    triangleMesh = std::make_unique<Mesh>(Mesh::createTriangle(
+        renderer->getVulkanDevice(), 
+        renderer->getVmaAllocator(), 
+        renderer->getCommandPool(), 
+        renderer->getGraphicsQueue()
+    ));
+    triangleMaterial->pipeline = trianglePipeline;
+
+    // When passing it to the renderer, dereference it:
+    renderer->createDrawable(triangleMesh.get(), triangleMaterial.get());
+
 
     LOG_INFO("ENGINE", "Engine initialized with {} threads", thread_count);
 }
@@ -22,6 +51,7 @@ void Engine::initialize() {
 Engine::~Engine() {
     // Cleanup if necessary
     is_running = false;
+    
 }
 void Engine::run() {
     is_running = true;

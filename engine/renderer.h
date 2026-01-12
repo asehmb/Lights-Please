@@ -8,10 +8,12 @@
 #include <optional>
 #include <vulkan/vulkan_core.h>
 #include <memory>
+#include "external/vk_mem_alloc.h"
 #include "material.hpp"
 #include "mesh.h"
-#include "pipeline.h"
+// #include "pipeline.h"
 #include "descriptor_allocator.h"
+#include "descriptor_layout.h"
 
 class Renderer {
 public:
@@ -41,7 +43,6 @@ public:
     // Public rendering methods
     void beginFrame();
     void endFrame();
-    void drawTriangle();
 
     void addDrawable(const Drawable& drawable) {
         drawables.push_back(drawable);
@@ -56,7 +57,17 @@ public:
         drawables.push_back(drawable);
         return drawable;
     }
+    
+    void createTriangleDrawable();
     void drawFrame();
+    VkDevice getVulkanDevice() const { return device; }
+    VmaAllocator getVmaAllocator() const { return vmaAllocator; }
+    DescriptorLayouts& getDescriptorLayouts() { return *descriptorLayouts; }
+    VkExtent2D getSwapChainExtent() const { return swapchainExtent; }
+    VkRenderPass getRenderPass() const { return renderPass; }
+    VkCommandPool getCommandPool() const { return commandPool; }
+    VkQueue getGraphicsQueue() const { return graphicsQueue; }
+
 
 private:
     VkInstance instance{VK_NULL_HANDLE};
@@ -64,6 +75,7 @@ private:
     std::vector<const char*> instanceExtensions;
     VkPhysicalDevice physicalDevice{VK_NULL_HANDLE};
     VkDevice device{VK_NULL_HANDLE};
+    VmaAllocator vmaAllocator{VK_NULL_HANDLE}; // Memory allocator
     std::vector<const char*> validationLayers;
     VkDebugUtilsMessengerEXT debugMessenger{VK_NULL_HANDLE};
     bool enableValidationLayers{false};
@@ -75,8 +87,7 @@ private:
     VkQueue graphicsQueue;
     VkQueue presentQueue;
     QueueFamilyIndices queueFamilyIndices;
-    VkDescriptorSetLayout globalDescriptorSetLayout{VK_NULL_HANDLE};
-    VkDescriptorSetLayout materialDescriptorSetLayout{VK_NULL_HANDLE};
+    VkPipelineLayout opaquePipelineLayout{VK_NULL_HANDLE}; // Shared pipeline layout for opaque objects
     
     // Swapchain framebuffers 
     std::vector<VkImage> swapchainImages;
@@ -101,6 +112,8 @@ private:
 
     std::unique_ptr<DescriptorAllocator> descriptorAllocator;
 
+    std::unique_ptr<DescriptorLayouts> descriptorLayouts;
+
 
     void initLogicalDevice();
     bool createSwapchain();
@@ -120,8 +133,6 @@ private:
 
     void createSemaphores();
     void createFences();
-
-    void createDescriptorSetLayouts();
 
     // TODO: refactor to use this structure for frame data
     //     struct FrameData {
@@ -146,5 +157,7 @@ private:
                          VkAccessFlags2 srcAccessMask,
                          VkAccessFlags2 dstAccessMask);
 
-    std::unique_ptr<GraphicPipeline> createOpaquePipeline(const char* vertexShaderPath, const char* fragmentShaderPath);
+    VkPipelineLayout createPipelineLayout();
+    std::shared_ptr<GraphicPipeline> createOpaquePipeline(VkPipelineLayout pipelineLayout, const char* vertexShaderPath, const char* fragmentShaderPath);
+    std::shared_ptr<GraphicPipeline> createOpaquePipeline(const char* vertexShaderPath, const char* fragmentShaderPath); // Uses shared opaque pipeline layout
 };

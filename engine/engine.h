@@ -1,6 +1,8 @@
 #pragma once
+#include "mesh.h"
 #include "thread_pool.h"
 #include "renderer.h"
+#include <memory>
 
 
 class Engine {
@@ -17,4 +19,7 @@ private:
     const float dt = 1.0f / 60.0f; // Target 60Hz for logic
     std::unique_ptr<ThreadPool> thread_pool;
     std::unique_ptr<Renderer> renderer;
+    std::unique_ptr<Mesh> triangleMesh;
+    std::unique_ptr<Material> triangleMaterial;
+    std::shared_ptr<GraphicPipeline> trianglePipeline;
 };

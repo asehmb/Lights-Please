@@ -1,21 +1,22 @@
 #include "renderer.h"
+#include "descriptor_layout.h"
 
+#include "external/vk_mem_alloc.h"
 #include <SDL.h>
 #include <SDL_stdinc.h>
 #include <SDL_vulkan.h>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <sys/types.h>
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
 #include <vulkan/vulkan_beta.h>
 #include <vector>
 #include "logger.h"
-#include "pipeline.h"
 #include <set>
 #include <cstring>
-#include "pipeline.h"
 
 Renderer::Renderer(SDL_Window* window)
 	: instance(VK_NULL_HANDLE), surface(VK_NULL_HANDLE)
@@ -27,22 +28,30 @@ Renderer::Renderer(SDL_Window* window)
 	if (instance != VK_NULL_HANDLE && surface != VK_NULL_HANDLE) {
 		if (pickPhysicalDevice()) {
 			initLogicalDevice();
+			DescriptorLayouts::init(device);  // Initialize descriptor layouts
 			createSwapchain();
 			createSwapchainImageViews();
 			createCommandPool();
 			createCommandBuffer();
 			createSemaphores();
 			createFences();
-			createDescriptorSetLayouts();
 			createRenderPass();
-			createFramebuffers();
-			
+			createFramebuffers();			
 		}
 	}
 }
 
 Renderer::~Renderer()
 {
+	if (!drawables.empty()) {
+		for (auto& drawable : drawables) {
+			// No dynamic memory to free in Drawable, just clear the vector
+			drawable.mesh = nullptr;
+			drawable.material = nullptr;
+			vkDestroyPipelineLayout(device, drawable.material->pipelineLayout, nullptr);
+		}
+		drawables.clear();
+	}
 	vkDeviceWaitIdle(device);
 	if (!framebuffers.empty()) {
 		for (auto framebuffer : framebuffers) {
@@ -56,13 +65,13 @@ Renderer::~Renderer()
 		vkDestroyRenderPass(device, renderPass, nullptr);
 		renderPass = VK_NULL_HANDLE;
 	}
-	if (globalDescriptorSetLayout != VK_NULL_HANDLE) {
-		vkDestroyDescriptorSetLayout(device, globalDescriptorSetLayout, nullptr);
-		globalDescriptorSetLayout = VK_NULL_HANDLE;
-	}
-	if (materialDescriptorSetLayout != VK_NULL_HANDLE) {
-		vkDestroyDescriptorSetLayout(device, materialDescriptorSetLayout, nullptr);
-		materialDescriptorSetLayout = VK_NULL_HANDLE;
+	
+	// Clean up descriptor layouts
+	DescriptorLayouts::cleanup(device);
+	
+	if (opaquePipelineLayout != VK_NULL_HANDLE) {
+		vkDestroyPipelineLayout(device, opaquePipelineLayout, nullptr);
+		opaquePipelineLayout = VK_NULL_HANDLE;
 	}
 	if (inFlightFence != VK_NULL_HANDLE) {
 		vkDestroyFence(device, inFlightFence, nullptr);
@@ -106,6 +115,10 @@ Renderer::~Renderer()
 			func(instance, debugMessenger, nullptr);
 			debugMessenger = VK_NULL_HANDLE;
 		}
+	}
+	if (vmaAllocator != VK_NULL_HANDLE) {
+		vmaDestroyAllocator(vmaAllocator);
+		vmaAllocator = VK_NULL_HANDLE;
 	}
 	if (device != VK_NULL_HANDLE) {
 		vkDestroyDevice(device, nullptr);
@@ -346,6 +359,18 @@ void Renderer::initLogicalDevice() {
 		vkGetDeviceQueue(device, indices.graphicsFamily.value(), 0, &graphicsQueue);
 		vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &presentQueue);
 		LOG_INFO("LOGICAL_DEVICE", "Logical device created successfully");
+		
+		// Initialize VMA allocator
+		VmaAllocatorCreateInfo allocatorInfo = {};
+		allocatorInfo.physicalDevice = physicalDevice;
+		allocatorInfo.device = device;
+		allocatorInfo.instance = instance;
+		
+		if (vmaCreateAllocator(&allocatorInfo, &vmaAllocator) != VK_SUCCESS) {
+			LOG_ERR("VMA", "Failed to create VMA allocator!");
+		} else {
+			LOG_INFO("VMA", "VMA allocator created successfully");
+		}
 	} else {
 		LOG_ERR("LOGICAL_DEVICE", "Failed to create logical device!");
 	}
@@ -362,6 +387,7 @@ VkPresentModeKHR Renderer::chooseSwapPresentMode(const std::vector<VkPresentMode
 	LOG_INFO("VULKAN", "Selected VK_PRESENT_MODE_FIFO_KHR for swapchain");
 	return VK_PRESENT_MODE_FIFO_KHR;
 }
+
 VkSurfaceFormatKHR Renderer::chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats) {
 	// Prefer SRGB format with UNORM color space
 	for (const auto& availableFormat : availableFormats) {
@@ -609,14 +635,20 @@ void Renderer::recordCommandBuffer(uint32_t imageIndex) {
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
 	for (const auto& drawable : drawables) {
-		if (currentPipeline != drawable.material->pipeline.get()) {
-			currentPipeline = drawable.material->pipeline.get();
-			currentPipeline->bind(commandBuffer);
+		if (drawable.material && drawable.material->pipeline) {
+			if (currentPipeline != drawable.material->pipeline.get()) {
+				currentPipeline = drawable.material->pipeline.get();
+				vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentPipeline->m_pipeline);
+			}
+			// Bind descriptor sets, vertex buffers, index buffers, etc. here as needed
+			drawMesh(commandBuffer, drawable.mesh);
+		} else {
+			LOG_WARN("RENDERER", "Drawable has null material or pipeline, skipping");
+			LOG_INFO("RENDERER", "Drawable Material: {}, Pipeline: {}",
+				drawable.material ? "Valid" : "Null",
+				(drawable.material && drawable.material->pipeline) ? "Valid" : "Null"
+			);
 		}
-		// Bind descriptor sets, vertex buffers, index buffers, etc. here as needed
-		// drawable.mesh->bind(commandBuffer);
-		// vkCmdDrawIndexed(commandBuffer, drawable.mesh->getIndexCount(), 1, 0, 0, 0);
-		drawMesh(commandBuffer, drawable.mesh);
 	}
 	
 	vkCmdEndRenderPass(commandBuffer);
@@ -636,25 +668,29 @@ void Renderer::recordCommandBuffer(uint32_t imageIndex) {
 	vkEndCommandBuffer(commandBuffer);
 }
 
-std::unique_ptr<GraphicPipeline> Renderer::createOpaquePipeline(const char* vertexShaderPath, const char* fragmentShaderPath) {
-	PipelineBuilder builder;
-
-	builder.set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
-	builder.set_polygon_mode(VK_POLYGON_MODE_FILL);
-	builder.set_cull_mode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE);
-	builder.enable_depthtest(true, VK_COMPARE_OP_LESS);
-	builder.disable_blending();
-	// TODO: Set proper pipeline layout instead of VK_NULL_HANDLE
-	builder.pipelineLayout = VK_NULL_HANDLE;
-
-	try {
-		GraphicPipeline pipeline = builder.build(device, renderPass, vertexShaderPath, fragmentShaderPath);
-		return std::make_unique<GraphicPipeline>(std::move(pipeline));
-	} catch (const std::exception& e) {
-		LOG_ERR("PIPELINE", "Failed to create opaque pipeline: {}", e.what());
-		return nullptr;
+VkPipelineLayout Renderer::createPipelineLayout() {
+	// Create a simple pipeline layout with our descriptor set layouts
+	auto layouts = DescriptorLayouts::getAllLayouts();
+	
+	VkPipelineLayoutCreateInfo layoutInfo{};
+	layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	layoutInfo.setLayoutCount = static_cast<uint32_t>(layouts.size());
+	layoutInfo.pSetLayouts = layouts.data();
+	layoutInfo.pushConstantRangeCount = 0; // No push constants for now
+	layoutInfo.pPushConstantRanges = nullptr;
+	
+	VkPipelineLayout pipelineLayout;
+	if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
+		LOG_ERR("PIPELINE_LAYOUT", "Failed to create pipeline layout!");
+		return VK_NULL_HANDLE;
 	}
+	
+	LOG_INFO("PIPELINE_LAYOUT", "Pipeline layout created successfully");
+	return pipelineLayout;
 }
+
+
+
 
 
 
@@ -781,13 +817,16 @@ void Renderer::transitionImage(VkCommandBuffer commandBuffer,
 }
 
 void Renderer::drawMesh(VkCommandBuffer commandBuffer, Mesh* mesh) {
+	if (!mesh) {
+		LOG_ERR("RENDERER", "drawMesh: null mesh pointer");
+		return;
+	}
 
 	// bind vertex and index buffers
 	mesh->bind(commandBuffer);
 	
 	// draw call
 	mesh->draw(commandBuffer);
-
 }
 
 void Renderer::createSemaphores() {
@@ -884,47 +923,6 @@ bool Renderer::createRenderPass() {
 	LOG_INFO("RENDER_PASS", "Render pass created successfully");
 
 	return true;
-}
-
-
-void Renderer::createDescriptorSetLayouts() {
-	// Global Descriptor Set Layout
-	VkDescriptorSetLayoutBinding globalBinding{};
-	globalBinding.binding = 0;
-	globalBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	globalBinding.descriptorCount = 1;
-	globalBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-	globalBinding.pImmutableSamplers = nullptr;
-
-	VkDescriptorSetLayoutCreateInfo globalLayoutInfo{};
-	globalLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	globalLayoutInfo.bindingCount = 1;
-	globalLayoutInfo.pBindings = &globalBinding;
-
-	if (vkCreateDescriptorSetLayout(device, &globalLayoutInfo, nullptr, &globalDescriptorSetLayout) != VK_SUCCESS) {
-		LOG_ERR("DESCRIPTOR_SET_LAYOUT", "Failed to create global descriptor set layout!");
-	} else {
-		LOG_INFO("DESCRIPTOR_SET_LAYOUT", "Global descriptor set layout created successfully!");
-	}
-
-	// Material Descriptor Set Layout
-	VkDescriptorSetLayoutBinding materialBinding{};
-	materialBinding.binding = 0;
-	materialBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	materialBinding.descriptorCount = 1;
-	materialBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-	materialBinding.pImmutableSamplers = nullptr;
-
-	VkDescriptorSetLayoutCreateInfo materialLayoutInfo{};
-	materialLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	materialLayoutInfo.bindingCount = 1;
-	materialLayoutInfo.pBindings = &materialBinding;
-
-	if (vkCreateDescriptorSetLayout(device, &materialLayoutInfo, nullptr, &materialDescriptorSetLayout) != VK_SUCCESS) {
-		LOG_ERR("DESCRIPTOR_SET_LAYOUT", "Failed to create material descriptor set layout!");
-	} else {
-		LOG_INFO("DESCRIPTOR_SET_LAYOUT", "Material descriptor set layout created successfully!");
-	}
 }
 
 

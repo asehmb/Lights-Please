@@ -3,10 +3,14 @@ project(Lights_Please)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 
 find_package(SDL2 REQUIRED)
 find_package(Vulkan REQUIRED)
+find_package(glm REQUIRED)
+
+
 
 add_executable(Lights_Please main.cpp 
     engine/math/vector.cpp 
@@ -17,12 +21,16 @@ add_executable(Lights_Please main.cpp
     engine/renderer.cpp
     engine/engine.cpp
     engine/mesh.cpp
+    engine/material.cpp
     engine/pipeline.cpp
     engine/descriptor_allocator.cpp
+    engine/descriptor_layout.cpp
+    engine/vma_implementation.cpp
 )
 target_link_libraries(Lights_Please PRIVATE 
     SDL2::SDL2 
     Vulkan::Vulkan
+    glm::glm
 )
 
 # Add external headers as SYSTEM to suppress warnings
