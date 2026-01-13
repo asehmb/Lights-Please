@@ -8,6 +8,7 @@
 #endif
 #include "external/vk_mem_alloc.h"
 #include "descriptor_layout.h"
+#include "ubo.h"
 
 class Material {
 public:
@@ -47,6 +48,7 @@ private:
     VkImageView m_diffuseTexture;
     VkImageView m_specularTexture;
     VkImageView m_normalTexture;
+    UBO materialUBO;
 
 
 };

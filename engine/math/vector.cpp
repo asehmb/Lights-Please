@@ -1,6 +1,8 @@
 #include "vector.hpp"
 #include <cmath>
 
+namespace mathplease {
+
 // Small epsilon for normalization safety
 static constexpr float kEpsilon = 1e-8f;
 
@@ -369,24 +371,32 @@ float Matrix4::determinant() const {
 }
 
 Matrix4 Matrix4::inverse() const {
-    float det = determinant();
-    if (std::abs(det) < kEpsilon) {
-        return identity(); // Return identity if not invertible
-    }
-    
-    Matrix4 result;
-    float invDet = 1.0f / det;
-    
-    // Calculate adjugate matrix and divide by determinant
-    // This is a simplified version - full implementation would compute all cofactors
-    result(0, 0) = (m[5] * (m[10] * m[15] - m[11] * m[14]) - m[6] * (m[9] * m[15] - m[11] * m[13]) + m[7] * (m[9] * m[14] - m[10] * m[13])) * invDet;
-    result(0, 1) = -(m[1] * (m[10] * m[15] - m[11] * m[14]) - m[2] * (m[9] * m[15] - m[11] * m[13]) + m[3] * (m[9] * m[14] - m[10] * m[13])) * invDet;
-    result(0, 2) = (m[1] * (m[6] * m[15] - m[7] * m[14]) - m[2] * (m[5] * m[15] - m[7] * m[13]) + m[3] * (m[5] * m[14] - m[6] * m[13])) * invDet;
-    result(0, 3) = -(m[1] * (m[6] * m[11] - m[7] * m[10]) - m[2] * (m[5] * m[11] - m[7] * m[9]) + m[3] * (m[5] * m[10] - m[6] * m[9])) * invDet;
-    
-    // ... (remaining cofactors would be calculated similarly)
-    // For brevity, this is a partial implementation. A complete inverse would calculate all 16 cofactors.
-    
-    return result;
+    Matrix4 inv = identity();
+
+    // Extract rotation (upper-left 3x3)
+    float r00 = m[0],  r01 = m[1],  r02 = m[2];
+    float r10 = m[4],  r11 = m[5],  r12 = m[6];
+    float r20 = m[8],  r21 = m[9],  r22 = m[10];
+
+    // Transpose rotation (inverse if orthonormal)
+    inv.m[0]  = r00; inv.m[1]  = r10; inv.m[2]  = r20;
+    inv.m[4]  = r01; inv.m[5]  = r11; inv.m[6]  = r21;
+    inv.m[8]  = r02; inv.m[9]  = r12; inv.m[10] = r22;
+
+    // Inverse translation
+    float tx = m[12];
+    float ty = m[13];
+    float tz = m[14];
+
+    inv.m[12] = -(inv.m[0] * tx + inv.m[4] * ty + inv.m[8]  * tz);
+    inv.m[13] = -(inv.m[1] * tx + inv.m[5] * ty + inv.m[9]  * tz);
+    inv.m[14] = -(inv.m[2] * tx + inv.m[6] * ty + inv.m[10] * tz);
+
+    return inv;
 }
+
+
+
+
+} // namespace mathplease
 

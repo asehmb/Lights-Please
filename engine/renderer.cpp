@@ -17,6 +17,8 @@
 #include "logger.h"
 #include <set>
 #include <cstring>
+#include "ubo.h"
+	
 
 Renderer::Renderer(SDL_Window* window)
 	: instance(VK_NULL_HANDLE), surface(VK_NULL_HANDLE)
@@ -37,12 +39,14 @@ Renderer::Renderer(SDL_Window* window)
 			createFences();
 			createRenderPass();
 			createFramebuffers();			
+			globalUBO.create(device, vmaAllocator); // Create the global UBO
 		}
 	}
 }
 
 Renderer::~Renderer()
 {
+	vkDeviceWaitIdle(device);
 	if (!drawables.empty()) {
 		for (auto& drawable : drawables) {
 			// No dynamic memory to free in Drawable, just clear the vector
@@ -51,7 +55,7 @@ Renderer::~Renderer()
 		}
 		drawables.clear();
 	}
-	vkDeviceWaitIdle(device);
+	globalUBO.cleanup(vmaAllocator);
 	if (!framebuffers.empty()) {
 		for (auto framebuffer : framebuffers) {
 			if (framebuffer != VK_NULL_HANDLE) {

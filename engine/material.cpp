@@ -9,10 +9,12 @@ Material::Material(VkDevice device, VmaAllocator allocator, DescriptorLayouts& d
       m_normalTexture(VK_NULL_HANDLE) {
 
     createPipelineLayout(descriptorLayouts);
+    materialUBO.create(device, allocator);
 }
 
 Material::~Material() {
     // Cleanup if needed
+    materialUBO.cleanup(m_allocator);
     if (pipelineLayout != VK_NULL_HANDLE) {
         vkDestroyPipelineLayout(m_device, pipelineLayout, nullptr);
         pipelineLayout = VK_NULL_HANDLE;
@@ -21,10 +23,14 @@ Material::~Material() {
 
 void Material::createPipelineLayout(DescriptorLayouts& descriptorLayouts) {
     // Create pipeline layout here if needed
+    VkDescriptorSetLayout globalLayout = descriptorLayouts.getGlobalLayout();
+    if (globalLayout == VK_NULL_HANDLE) {
+        throw std::runtime_error("Global descriptor layout is not initialized!");
+    }
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 0; // Optional
-    pipelineLayoutInfo.pSetLayouts = nullptr; // Optional
+    pipelineLayoutInfo.setLayoutCount = 1;
+    pipelineLayoutInfo.pSetLayouts = &globalLayout;
     pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
     pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
     std::vector<VkDescriptorSetLayout> layouts = descriptorLayouts.getAllLayouts();

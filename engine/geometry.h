@@ -5,10 +5,10 @@
 #include "math/vector.hpp"
 
 struct Vertex {
-    Vector3 pos;     // Position
-    Vector3 colour;  // Colour
-    Vector3 normal;  // Normal
-    Vector2 uv;      // Texture Coordinates
+    mathplease::Vector3 pos;     // Position
+    mathplease::Vector3 colour;  // Colour
+    mathplease::Vector3 normal;  // Normal
+    mathplease::Vector2 uv;      // Texture Coordinates
 
     static VkVertexInputBindingDescription getBindingDescription() {
         VkVertexInputBindingDescription bindingDescription{};

@@ -13,6 +13,9 @@ void Engine::initialize() {
     // create thread pool with number of hardware threads
     unsigned int thread_count = std::thread::hardware_concurrency();
     thread_pool = std::make_unique<ThreadPool>(thread_count);
+    
+    // create camera
+    camera = std::make_unique<Camera>();
 
 
     // create renderer from platform window
@@ -95,6 +98,8 @@ void Engine::process_input() {
 void Engine::update(float fixed_dt) {
     // Update game logic, physics, AI, etc. here
     // sumbit tasks to thread pool if needed
+
+    camera->update(fixed_dt);
 }
 
 void Engine::render(float alpha) {

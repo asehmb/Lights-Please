@@ -3,7 +3,7 @@
 #include "thread_pool.h"
 #include "renderer.h"
 #include <memory>
-
+#include "camera.h"
 
 class Engine {
 public:
@@ -17,6 +17,7 @@ private:
 
     bool is_running = false;
     const float dt = 1.0f / 60.0f; // Target 60Hz for logic
+    std::unique_ptr<Camera> camera;
     std::unique_ptr<ThreadPool> thread_pool;
     std::unique_ptr<Renderer> renderer;
     std::unique_ptr<Mesh> triangleMesh;

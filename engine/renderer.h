@@ -14,6 +14,7 @@
 // #include "pipeline.h"
 #include "descriptor_allocator.h"
 #include "descriptor_layout.h"
+#include "ubo.h"
 
 class Renderer {
 public:
@@ -88,6 +89,7 @@ private:
     VkQueue presentQueue;
     QueueFamilyIndices queueFamilyIndices;
     VkPipelineLayout opaquePipelineLayout{VK_NULL_HANDLE}; // Shared pipeline layout for opaque objects
+    UBO globalUBO;
     
     // Swapchain framebuffers 
     std::vector<VkImage> swapchainImages;

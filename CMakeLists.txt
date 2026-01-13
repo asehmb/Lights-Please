@@ -25,6 +25,8 @@ add_executable(LightsPlease main.cpp
     engine/descriptor_allocator.cpp
     engine/descriptor_layout.cpp
     engine/vma_implementation.cpp
+    engine/camera.cpp
+    engine/ubo.cpp
 )
 target_link_libraries(LightsPlease PRIVATE 
     SDL2::SDL2 

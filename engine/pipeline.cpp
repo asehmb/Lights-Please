@@ -38,9 +38,6 @@ GraphicPipeline::GraphicPipeline(VkDevice device,
 
     VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 
-    // Here you would set up the rest of the pipeline (fixed-function states, etc.)
-    // For brevity, we'll skip directly to pipeline creation
-
     std::vector<VkDynamicState> dynamicStates = {
         VK_DYNAMIC_STATE_VIEWPORT,
         VK_DYNAMIC_STATE_SCISSOR

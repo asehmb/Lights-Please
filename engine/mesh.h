@@ -17,14 +17,14 @@ enum class PrimitiveType {
 };
 
 struct BoundingBox {
-    Vector3 min;
-    Vector3 max;
+    mathplease::Vector3 min;
+    mathplease::Vector3 max;
     
     BoundingBox() : min(0, 0, 0), max(0, 0, 0) {}
-    BoundingBox(const Vector3& minPoint, const Vector3& maxPoint) : min(minPoint), max(maxPoint) {}
+    BoundingBox(const mathplease::Vector3& minPoint, const mathplease::Vector3& maxPoint) : min(minPoint), max(maxPoint) {}
     
-    Vector3 getCenter() const { return (min + max) * 0.5f; }
-    Vector3 getSize() const { return max - min; }
+    mathplease::Vector3 getCenter() const { return (min + max) * 0.5f; }
+    mathplease::Vector3 getSize() const { return max - min; }
 };
 
 class Mesh {
