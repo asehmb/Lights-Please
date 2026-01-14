@@ -52,3 +52,15 @@ struct Vertex {
             && normal == other.normal && uv == other.uv;
     }
 };
+
+namespace std {
+    template<> struct hash<Vertex> {
+        size_t operator()(Vertex const& vertex) const {
+            size_t h1 = hash<float>()(vertex.pos.x) ^ (hash<float>()(vertex.pos.y) << 1) ^ (hash<float>()(vertex.pos.z) << 2);
+            size_t h2 = hash<float>()(vertex.colour.x) ^ (hash<float>()(vertex.colour.y) << 1) ^ (hash<float>()(vertex.colour.z) << 2);
+            size_t h3 = hash<float>()(vertex.normal.x) ^ (hash<float>()(vertex.normal.y) << 1) ^ (hash<float>()(vertex.normal.z) << 2);
+            size_t h4 = hash<float>()(vertex.uv.x) ^ (hash<float>()(vertex.uv.y) << 1);
+            return h1 ^ (h2 << 1) ^ (h3 << 2) ^ (h4 << 3);
+        }
+    };
+} // namespace std

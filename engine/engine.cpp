@@ -4,6 +4,9 @@
 #include "pipeline.h"
 #include "platform.h"
 #include <chrono>
+#include <vector>
+#define TINYOBJLOADER_IMPLEMENTATION
+#include "loadModel.h"
 
 
 void Engine::initialize() {
@@ -16,6 +19,8 @@ void Engine::initialize() {
     
     // create camera
     camera = std::make_shared<Camera>();
+    Mesh::MeshData meshData;
+    modelsPlease::loadModelFromOBJ("models/bigben.obj", meshData.vertices, meshData.indices);
 
 
     // create renderer from platform window
@@ -37,12 +42,13 @@ void Engine::initialize() {
         renderer->getSwapChainExtent(),
         &triangleMaterial->pipelineLayout
     );
-    triangleMesh = std::make_unique<Mesh>(Mesh::createCube(
-        renderer->getVulkanDevice(), 
-        renderer->getVmaAllocator(), 
-        renderer->getCommandPool(), 
-        renderer->getGraphicsQueue()
-    ));
+    triangleMesh = std::make_unique<Mesh>(
+        renderer->getVulkanDevice(),
+        renderer->getVmaAllocator(),
+        renderer->getCommandPool(),
+        renderer->getGraphicsQueue(),
+        meshData
+    );
     triangleMaterial->pipeline = trianglePipeline;
 
     // When passing it to the renderer, dereference it:

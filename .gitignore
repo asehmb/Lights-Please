@@ -7,6 +7,8 @@ build/
 .vscode/
 
 .cache
+*.obj
+*.spv
 
 compile_commands.json
 
