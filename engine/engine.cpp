@@ -8,7 +8,7 @@
 
 void Engine::initialize() {
     is_running = true;
-    platform::init();
+    platform::init(1280, 720);
 
     // create thread pool with number of hardware threads
     unsigned int thread_count = std::thread::hardware_concurrency();
@@ -37,7 +37,7 @@ void Engine::initialize() {
         renderer->getSwapChainExtent(),
         &triangleMaterial->pipelineLayout
     );
-    triangleMesh = std::make_unique<Mesh>(Mesh::createTriangle(
+    triangleMesh = std::make_unique<Mesh>(Mesh::createCube(
         renderer->getVulkanDevice(), 
         renderer->getVmaAllocator(), 
         renderer->getCommandPool(), 
@@ -94,13 +94,44 @@ void Engine::run() {
 
 void Engine::process_input() {
     platform::poll_events();
+    
 }
 
 void Engine::update(float fixed_dt) {
     // Update game logic, physics, AI, etc. here
     // sumbit tasks to thread pool if needed
 
-    camera->update(fixed_dt);
+    // camera->update(fixed_dt);
+    std::vector<Key> pressed_keys = platform::get_pressed_keys();
+    if (!pressed_keys.empty()) {
+        float normalizedYaw = camera->yaw;
+        for (Key k : pressed_keys) {
+            if (k == Key::Escape) {
+                is_running = false;
+            }
+            if (k == Key::W) {
+                camera->position.z -= camera->velocity.z * fixed_dt;
+            }
+            if (k == Key::S) {
+                camera->position.z += camera->velocity.z * fixed_dt;
+            }
+            if (k == Key::A) {
+                camera->position.x -= camera->velocity.x * fixed_dt;
+            }
+            if (k == Key::D) {
+                camera->position.x += camera->velocity.x * fixed_dt;
+            }
+            if (k == Key::Space) {
+                camera->position.y += camera->velocity.y * fixed_dt;
+            }
+            if (k == Key::Shift) {
+                camera->position.y -= camera->velocity.y * fixed_dt;
+            }
+        }
+    }
+    mathplease::Vector2 relative_mouse_pos = platform::get_relative_mouse_position();
+    camera->yaw -= relative_mouse_pos.x * camera->mouseSensitivity * fixed_dt;
+    camera->pitch -= relative_mouse_pos.y * camera->mouseSensitivity * fixed_dt;
 }
 
 void Engine::render(float alpha) {

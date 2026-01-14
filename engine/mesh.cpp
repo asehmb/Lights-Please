@@ -349,13 +349,15 @@ void Mesh::updateIndices(const std::vector<uint32_t>& newIndices) {
 Mesh Mesh::createQuad(VkDevice device, VmaAllocator allocator, VkCommandPool commandPool, VkQueue graphicsQueue) {
     MeshData data;
     data.vertices = {
-        {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}}, // bottom-left
-        {{ 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f}}, // bottom-right
-        {{ 0.5f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}}, // top-right
-        {{-0.5f,  0.5f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}}  // top-left
+        {{ -0.5f, 0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.5f, 0.0f}}, // top-left
+        {{ 0.5f,  0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 0.0f}}, // top-right
+        {{ 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}}, // bottom-right
+        {{-0.5f,  -0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}}  // bottom-left
+
     };
     
-    data.indices = { 0, 1, 2, 2, 3, 0 };
+    data.indices = { 0, 1, 2, 
+        2, 3, 0 };
     
     return Mesh(device, allocator, commandPool, graphicsQueue, data);
 }
@@ -363,9 +365,9 @@ Mesh Mesh::createQuad(VkDevice device, VmaAllocator allocator, VkCommandPool com
 Mesh Mesh::createTriangle(VkDevice device, VmaAllocator allocator, VkCommandPool commandPool, VkQueue graphicsQueue) {
     MeshData data;
     data.vertices = {
-        {{ 0.0f, 0.5f, 0.0f}, {1.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.5f, 0.0f}}, // bottom
-        {{ 0.5f, -0.5f, 0.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}}, // top-right
-        {{-0.5f,  -0.5f, 0.0f}, {1.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}}  // top-left
+        {{ 0.0f, 0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.5f, 0.0f}}, // top
+        {{ 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}}, // bottom-right
+        {{-0.5f,  -0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}}  // bottom-left
     };
     
     data.indices = { 0, 1, 2 };

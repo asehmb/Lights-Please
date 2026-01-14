@@ -14,6 +14,7 @@ private:
     void process_input();
     void update(float fixed_dt); // Fixed logic (Physics, AI)
     void render(float alpha);    // Variable rendering (Graphics)
+    mathplease::Vector2 last_mouse_pos;
 
     bool is_running = false;
     const float dt = 1.0f / 60.0f; // Target 60Hz for logic

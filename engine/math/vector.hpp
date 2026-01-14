@@ -27,6 +27,10 @@ public:
         return Vector2(x / scalar, y / scalar);
     }
 
+    bool operator==(const Vector2& other) const {
+        return (x == other.x) && (y == other.y);
+    }
+
     // Length and normalization
     float length() const;
     float lengthSquared() const;
@@ -66,6 +70,10 @@ public:
 
     Vector3 operator/(float scalar) const {
         return Vector3(x / scalar, y / scalar, z / scalar);
+    }
+    
+    bool operator==(const Vector3& other) const {
+        return (x == other.x) && (y == other.y) && (z == other.z);
     }
 
     // Length and normalization

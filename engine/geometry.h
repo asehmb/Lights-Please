@@ -47,4 +47,8 @@ struct Vertex {
 
         return attributeDescriptions;
     }
+    bool operator==(const Vertex& other) const {
+        return pos == other.pos && colour == other.colour 
+            && normal == other.normal && uv == other.uv;
+    }
 };
