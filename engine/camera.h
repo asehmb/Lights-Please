@@ -8,11 +8,11 @@ class Camera {
 public:
     Camera();
     ~Camera();
-    mathplease::Vector3 position = mathplease::Vector3(0.0f, 0.0f, 1.0f);
+    mathplease::Vector3 position = mathplease::Vector3(0.0f, 0.0f, 4.0f);
     mathplease::Vector3 velocity = mathplease::Vector3(0.0f, 0.0f, 0.0f);
     
     float pitch = 0.0f;
-    float yaw = 0.0f;
+    float yaw = 0.0f; // Start looking down -Z
     float fov = 45.0f;
     float aspectRatio = 1.77778f; // Default to 16:9
     

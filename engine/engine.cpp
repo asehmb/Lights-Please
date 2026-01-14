@@ -15,13 +15,14 @@ void Engine::initialize() {
     thread_pool = std::make_unique<ThreadPool>(thread_count);
     
     // create camera
-    camera = std::make_unique<Camera>();
+    camera = std::make_shared<Camera>();
 
 
     // create renderer from platform window
 
     renderer = std::make_unique<Renderer>(platform::get_window_ptr());
     // renderer->createTriangleDrawable();
+    renderer->setCamera(camera);
     
     triangleMaterial = std::make_unique<Material>(
         renderer->getVulkanDevice(),

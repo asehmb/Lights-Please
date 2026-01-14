@@ -17,24 +17,26 @@ DescriptorAllocator::~DescriptorAllocator() {
 }
 
 
-void DescriptorAllocator::init(VkDevice device) {
+void DescriptorAllocator::init(VkDevice device, uint8_t poolCount) {
     m_device = device;
 
     // Create the initial pool
+    m_poolCount = poolCount;
     m_currentPool = create_pool();
     m_pools.push_back(m_currentPool);
 }
 
 VkDescriptorPool DescriptorAllocator::create_pool() {
-    VkDescriptorPoolSize poolSize{};
-    poolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    poolSize.descriptorCount = MAX_DESCRIPTOR_SETS;
+    std::array<VkDescriptorPoolSize, 2> poolSizes{{
+        { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, m_poolCount },
+        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_poolCount }
+    }};
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.poolSizeCount = 1;
-    poolInfo.pPoolSizes = &poolSize;
-    poolInfo.maxSets = MAX_DESCRIPTOR_SETS;
+    poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+    poolInfo.pPoolSizes = poolSizes.data();
+    poolInfo.maxSets = m_poolCount;
 
     VkDescriptorPool descriptorPool;
     if (vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &descriptorPool) != VK_SUCCESS) {

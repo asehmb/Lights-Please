@@ -56,6 +56,10 @@ public:
         return Vector3(x - other.x, y - other.y, z - other.z);
     }
 
+    Vector3 operator-() const {
+        return Vector3(-x, -y, -z);
+    }
+
     Vector3 operator*(float scalar) const {
         return Vector3(x * scalar, y * scalar, z * scalar);
     }

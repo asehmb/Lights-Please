@@ -17,6 +17,7 @@
 #include "logger.h"
 #include <set>
 #include <cstring>
+#include "math/vector.hpp"
 #include "ubo.h"
 	
 
@@ -38,15 +39,22 @@ Renderer::Renderer(SDL_Window* window)
 			createSemaphores();
 			createFences();
 			createRenderPass();
-			createFramebuffers();			
-			globalUBO.create(device, vmaAllocator); // Create the global UBO
+			createFramebuffers();	
+			createUBOs();
+			createDescriptorSets();
+			writeCameraUBO();
 		}
 	}
 }
 
+
+
 Renderer::~Renderer()
 {
 	vkDeviceWaitIdle(device);
+
+	cleanupDescriptorSets();
+
 	if (!drawables.empty()) {
 		for (auto& drawable : drawables) {
 			// No dynamic memory to free in Drawable, just clear the vector
@@ -55,7 +63,9 @@ Renderer::~Renderer()
 		}
 		drawables.clear();
 	}
-	globalUBO.cleanup(vmaAllocator);
+
+	cleanupUBOs();
+
 	if (!framebuffers.empty()) {
 		for (auto framebuffer : framebuffers) {
 			if (framebuffer != VK_NULL_HANDLE) {
@@ -64,6 +74,7 @@ Renderer::~Renderer()
 		}
 		framebuffers.clear();
 	}
+
 	if (renderPass != VK_NULL_HANDLE) {
 		vkDestroyRenderPass(device, renderPass, nullptr);
 		renderPass = VK_NULL_HANDLE;
@@ -76,42 +87,51 @@ Renderer::~Renderer()
 		vkDestroyPipelineLayout(device, opaquePipelineLayout, nullptr);
 		opaquePipelineLayout = VK_NULL_HANDLE;
 	}
+
 	if (inFlightFence != VK_NULL_HANDLE) {
 		vkDestroyFence(device, inFlightFence, nullptr);
 		inFlightFence = VK_NULL_HANDLE;
 	}
+
 	if (renderFinishedSemaphore != VK_NULL_HANDLE) {
 		vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
 		renderFinishedSemaphore = VK_NULL_HANDLE;
 	}
+
 	if (imageAvailableSemaphore != VK_NULL_HANDLE) {
 		vkDestroySemaphore(device, imageAvailableSemaphore, nullptr);
 		imageAvailableSemaphore = VK_NULL_HANDLE;
 	}
+
 	if (commandBuffer != VK_NULL_HANDLE) {
 		vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
 		commandBuffer = VK_NULL_HANDLE;
 	}
+
 	if (commandPool != VK_NULL_HANDLE) {
 		vkDestroyCommandPool(device, commandPool, nullptr);
 		commandPool = VK_NULL_HANDLE;
 	}
+
 	if (!swapchainImageViews.empty()) {
 		for (auto imageView : swapchainImageViews) {
 			vkDestroyImageView(device, imageView, nullptr);
 		}
 		swapchainImageViews.clear();
 	}
+
 	// Clear layout tracking
 	swapchainImageLayouts.clear();
 	if (swapchain != VK_NULL_HANDLE) {
 		vkDestroySwapchainKHR(device, swapchain, nullptr);
 		swapchain = VK_NULL_HANDLE;
 	}
+
 	if (surface != VK_NULL_HANDLE) {
 		vkDestroySurfaceKHR(instance, surface, nullptr);
 		surface = VK_NULL_HANDLE;
 	}
+
 	if (debugMessenger != VK_NULL_HANDLE) {
 		auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
 		if (func != nullptr) {
@@ -119,10 +139,12 @@ Renderer::~Renderer()
 			debugMessenger = VK_NULL_HANDLE;
 		}
 	}
+
 	if (vmaAllocator != VK_NULL_HANDLE) {
 		vmaDestroyAllocator(vmaAllocator);
 		vmaAllocator = VK_NULL_HANDLE;
 	}
+
 	if (device != VK_NULL_HANDLE) {
 		vkDestroyDevice(device, nullptr);
 		device = VK_NULL_HANDLE;
@@ -459,6 +481,7 @@ bool Renderer::createSwapchain() {
 	int imageCount = surfaceCapabilities.capabilities.minImageCount + 1;
 	if (surfaceCapabilities.capabilities.maxImageCount > 0 && imageCount > surfaceCapabilities.capabilities.maxImageCount) {
 		imageCount = surfaceCapabilities.capabilities.maxImageCount;
+		LOG_INFO("SWAPCHAIN", "Adjusted swapchain image count to max allowed: {}", imageCount);
 	}
 	
 
@@ -502,6 +525,7 @@ bool Renderer::createSwapchain() {
 	uint32_t swapchainImageCount = 0;
 	vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, nullptr);
 	swapchainImages.resize(swapchainImageCount);
+	this->imageCount = swapchainImageCount;
 	vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, swapchainImages.data());
 	swapchainImageFormat = swapchainCreateInfo.imageFormat;
 	
@@ -516,6 +540,11 @@ bool Renderer::recreateSwapchain() {
 
 
 	// Cleanup existing swapchain
+
+	cleanupUBOs();
+	globalUBO.clear();
+	cleanupDescriptorSets();
+	globalDescriptorSets.clear();
 
 	if (!framebuffers.empty()) {
 		for (auto framebuffer : framebuffers) {
@@ -542,6 +571,9 @@ bool Renderer::recreateSwapchain() {
 	createSwapchain();
 	createSwapchainImageViews();
 	createFramebuffers();
+	createUBOs();
+	createDescriptorSets();
+	writeCameraUBO();
 	return true;
 }
 
@@ -644,6 +676,16 @@ void Renderer::recordCommandBuffer(uint32_t imageIndex) {
 				vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentPipeline->m_pipeline);
 			}
 			// Bind descriptor sets, vertex buffers, index buffers, etc. here as needed
+
+			vkCmdBindDescriptorSets(commandBuffer, 
+				VK_PIPELINE_BIND_POINT_GRAPHICS, 
+				drawable.material->pipelineLayout, 
+				0, 
+				1, 
+				&globalDescriptorSets[imageIndex], 
+				0, 
+				nullptr);
+
 			drawMesh(commandBuffer, drawable.mesh);
 		} else {
 			LOG_WARN("RENDERER", "Drawable has null material or pipeline, skipping");
@@ -714,6 +756,17 @@ void Renderer::drawFrame() {
 		LOG_ERR("DRAW_FRAME", "Failed to acquire swap chain image!");
 		return;
 	}
+
+	// update cameras, UBOs, etc. here as needed;
+	if (camera) {
+
+		mathplease::Matrix4 identity = mathplease::Matrix4::identity();
+		//TODO: replace with actual camera matrices
+		
+		globalUBO[imageIndex].update(camera->getViewMatrix(),
+									camera->getProjectionMatrix());
+	}
+
 	vkResetFences(device, 1, &inFlightFence);
 
 
@@ -749,6 +802,7 @@ void Renderer::drawFrame() {
 	presentInfo.pSwapchains = swapChains;
 	presentInfo.pImageIndices = &imageIndex;
 	presentInfo.pResults = nullptr; // Optional
+
 
 	result = vkQueuePresentKHR(presentQueue, &presentInfo);
 
@@ -985,4 +1039,53 @@ bool Renderer::createFramebuffers() {
 	LOG_INFO("FRAMEBUFFER", "Framebuffers created successfully");
 
 	return true;
+}
+
+void Renderer::createUBOs() {
+	globalUBO.resize(imageCount);
+	for (uint32_t i = 0; i < imageCount; ++i) {
+		globalUBO[i].create(device, vmaAllocator); // Create UBO for each frame in flight
+	}
+}
+
+void Renderer::cleanupUBOs() {
+	for (uint32_t i = 0; i < imageCount; ++i) {
+		globalUBO[i].cleanup(vmaAllocator);
+	}
+}
+
+void Renderer::writeCameraUBO() {
+	VkDescriptorBufferInfo bufferInfo{};
+	bufferInfo.offset = 0;
+	bufferInfo.range  = sizeof(GlobalUniforms);
+
+	VkWriteDescriptorSet write{};
+	write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	write.dstBinding = 0; // <-- same binding
+	write.dstArrayElement = 0;
+	write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	write.descriptorCount = 1;
+	write.pBufferInfo = &bufferInfo;
+
+	for (uint32_t i = 0; i < imageCount; ++i) {
+		bufferInfo.buffer = globalUBO[i].buffer;
+		write.dstSet = globalDescriptorSets[i];
+		vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
+	}
+}
+
+void Renderer::createDescriptorSets() {
+	descriptorAllocator = std::make_unique<DescriptorAllocator>();
+	descriptorAllocator->init(device, imageCount);
+	// Allocate global descriptor sets for each frame in flight
+	for (size_t i = 0; i < imageCount; ++i) {
+		VkDescriptorSet globalSet = descriptorAllocator->allocate(descriptorLayouts->getGlobalLayout());
+		globalDescriptorSets.push_back(globalSet);
+	}
+}
+
+void Renderer::cleanupDescriptorSets() {
+	if (descriptorAllocator) {
+		descriptorAllocator.reset();
+	}
 }

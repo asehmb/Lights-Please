@@ -129,8 +129,15 @@ mathplease::Matrix4 Camera::getRotationMatrix()
 mathplease::Matrix4 Camera::getViewMatrix()
 {
     mathplease::Matrix4 rotation = getRotationMatrix();
-    mathplease::Matrix4 translation = mathplease::Matrix4::translate(position);
-    return rotation.inverse() * translation.inverse();
+    
+    // Optimization 1: The inverse of a rotation is its transpose.
+    // Much faster than calculating determinants.
+    mathplease::Matrix4 rotationInv = rotation.transposed();
+
+    // Optimization 2: The inverse of a translation is just negative position.
+    mathplease::Matrix4 translationInv = mathplease::Matrix4::translate(-position);
+
+    return rotationInv * translationInv;
 }
 
 mathplease::Matrix4 Camera::getProjectionMatrix(float nearPlane, float farPlane)

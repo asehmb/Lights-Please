@@ -8,6 +8,7 @@
 #include <optional>
 #include <vulkan/vulkan_core.h>
 #include <memory>
+#include "camera.h"
 #include "external/vk_mem_alloc.h"
 #include "material.hpp"
 #include "mesh.h"
@@ -15,6 +16,8 @@
 #include "descriptor_allocator.h"
 #include "descriptor_layout.h"
 #include "ubo.h"
+
+#define MAX_FRAMES_IN_FLIGHT 3 // max is 3 because min is set to 2 and max is min+1 or less
 
 class Renderer {
 public:
@@ -69,6 +72,10 @@ public:
     VkCommandPool getCommandPool() const { return commandPool; }
     VkQueue getGraphicsQueue() const { return graphicsQueue; }
 
+    void setCamera(std::shared_ptr<Camera> cam) {
+        camera = cam;
+    }
+
 
 private:
     VkInstance instance{VK_NULL_HANDLE};
@@ -89,7 +96,8 @@ private:
     VkQueue presentQueue;
     QueueFamilyIndices queueFamilyIndices;
     VkPipelineLayout opaquePipelineLayout{VK_NULL_HANDLE}; // Shared pipeline layout for opaque objects
-    UBO globalUBO;
+    std::vector<UBO> globalUBO; // UBO for each swapchain image
+    std::vector<VkDescriptorSet> globalDescriptorSets;
     
     // Swapchain framebuffers 
     std::vector<VkImage> swapchainImages;
@@ -97,7 +105,7 @@ private:
     std::vector<VkImageLayout> swapchainImageLayouts; // Track current layout of each swapchain image
     VkFormat swapchainImageFormat;
     std::vector<VkFramebuffer> framebuffers;
-    uint32_t imageCount{2}; // Double buffering
+    uint32_t imageCount{MAX_FRAMES_IN_FLIGHT};
 
     // Synchronization objects
     VkSemaphore imageAvailableSemaphore{VK_NULL_HANDLE};
@@ -115,6 +123,8 @@ private:
     std::unique_ptr<DescriptorAllocator> descriptorAllocator;
 
     std::unique_ptr<DescriptorLayouts> descriptorLayouts;
+
+    std::shared_ptr<Camera> camera;
 
 
     void initLogicalDevice();
@@ -135,6 +145,16 @@ private:
 
     void createSemaphores();
     void createFences();
+
+
+    void writeCameraUBO();
+    
+
+    void createUBOs();
+    void cleanupUBOs();
+
+    void createDescriptorSets();
+    void cleanupDescriptorSets();
 
     // TODO: refactor to use this structure for frame data
     //     struct FrameData {

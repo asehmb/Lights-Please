@@ -1,5 +1,6 @@
 #include "vector.hpp"
 #include <cmath>
+#include <cstring>
 
 namespace mathplease {
 
@@ -245,12 +246,13 @@ Matrix4 Matrix4::scale(float uniformScale) {
 
 Matrix4 Matrix4::perspective(float fovYRadians, float aspectRatio, float nearPlane, float farPlane) {
     Matrix4 result;
+    std::memset(result.m, 0, sizeof(result.m));
     float tanHalfFovy = std::tan(fovYRadians * 0.5f);
     
     result(0, 0) = 1.0f / (aspectRatio * tanHalfFovy);
-    result(1, 1) = 1.0f / tanHalfFovy;
-    result(2, 2) = -(farPlane + nearPlane) / (farPlane - nearPlane);
-    result(2, 3) = -(2.0f * farPlane * nearPlane) / (farPlane - nearPlane);
+    result(1, 1) = -1.0f / tanHalfFovy; 
+    result(2, 2) = farPlane / (nearPlane - farPlane);
+    result(2, 3) = (farPlane * nearPlane) / (nearPlane - farPlane);
     result(3, 2) = -1.0f;
     
     return result;
@@ -371,28 +373,53 @@ float Matrix4::determinant() const {
 }
 
 Matrix4 Matrix4::inverse() const {
-    Matrix4 inv = identity();
+    Matrix4 result;
+    float s0 = m[0] * m[5] - m[1] * m[4];
+    float s1 = m[0] * m[6] - m[2] * m[4];
+    float s2 = m[0] * m[7] - m[3] * m[4];
+    float s3 = m[1] * m[6] - m[2] * m[5];
+    float s4 = m[1] * m[7] - m[3] * m[5];
+    float s5 = m[2] * m[7] - m[3] * m[6];
 
-    // Extract rotation (upper-left 3x3)
-    float r00 = m[0],  r01 = m[1],  r02 = m[2];
-    float r10 = m[4],  r11 = m[5],  r12 = m[6];
-    float r20 = m[8],  r21 = m[9],  r22 = m[10];
+    float c5 = m[10] * m[15] - m[11] * m[14];
+    float c4 = m[9] * m[15] - m[11] * m[13];
+    float c3 = m[9] * m[14] - m[10] * m[13];
+    float c2 = m[8] * m[15] - m[11] * m[12];
+    float c1 = m[8] * m[14] - m[10] * m[12];
+    float c0 = m[8] * m[13] - m[9] * m[12];
 
-    // Transpose rotation (inverse if orthonormal)
-    inv.m[0]  = r00; inv.m[1]  = r10; inv.m[2]  = r20;
-    inv.m[4]  = r01; inv.m[5]  = r11; inv.m[6]  = r21;
-    inv.m[8]  = r02; inv.m[9]  = r12; inv.m[10] = r22;
+    float det = (s0 * c5 - s1 * c4 + s2 * c3 + s3 * c2 - s4 * c1 + s5 * c0);
 
-    // Inverse translation
-    float tx = m[12];
-    float ty = m[13];
-    float tz = m[14];
+    if (std::fabs(det) < kEpsilon) {
+        // Non-invertible matrix, return identity as a fallback
+        return identity();
+    }
+    float invDet = 1.0f / det;
 
-    inv.m[12] = -(inv.m[0] * tx + inv.m[4] * ty + inv.m[8]  * tz);
-    inv.m[13] = -(inv.m[1] * tx + inv.m[5] * ty + inv.m[9]  * tz);
-    inv.m[14] = -(inv.m[2] * tx + inv.m[6] * ty + inv.m[10] * tz);
+    // Calculate the adjugate matrix multiplied by 1/det
+    result.m[0] = ( m[5] * c5 - m[6] * c4 + m[7] * c3) * invDet;
+    result.m[1] = (-m[1] * c5 + m[2] * c4 - m[3] * c3) * invDet;
+    result.m[2] = ( m[13] * s5 - m[14] * s4 + m[15] * s3) * invDet;
+    result.m[3] = (-m[9] * s5 + m[10] * s4 - m[11] * s3) * invDet;
 
-    return inv;
+    result.m[4] = (-m[4] * c5 + m[6] * c2 - m[7] * c1) * invDet;
+    result.m[5] = ( m[0] * c5 - m[2] * c2 + m[3] * c1) * invDet;
+    result.m[6] = (-m[12] * s5 + m[14] * s2 - m[15] * s1) * invDet;
+    result.m[7] = ( m[8] * s5 - m[10] * s2 + m[11] * s1) * invDet;
+
+    result.m[8] = ( m[4] * c4 - m[5] * c2 + m[7] * c0) * invDet;
+    result.m[9] = (-m[0] * c4 + m[1] * c2 - m[3] * c0) * invDet;
+    result.m[10] = ( m[12] * s4 - m[13] * s2 + m[15] * s0) * invDet;
+    result.m[11] = (-m[8] * s4 + m[9] * s2 - m[11] * s0) * invDet;
+
+    result.m[12] = (-m[4] * c3 + m[5] * c1 - m[6] * c0) * invDet;
+    result.m[13] = ( m[0] * c3 - m[1] * c1 + m[2] * c0) * invDet;
+    result.m[14] = (-m[12] * s3 + m[13] * s1 - m[14] * s0) * invDet;
+    result.m[15] = ( m[8] * s3 - m[9] * s1 + m[10] * s0) * invDet;
+
+    return result;
+
+
 }
 
 

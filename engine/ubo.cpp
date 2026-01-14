@@ -26,8 +26,21 @@ void UBO::update(mathplease::Matrix4 model, mathplease::Matrix4 view, mathplease
     data.model = model;
     data.view = view;
     data.proj = proj;
+    data.proj(1, 1) *= -1; // Adjust for Vulkan's coordinate system
 
     // Copy data to mapped memory
+    std::memcpy(mapped, &data, sizeof(GlobalUniforms));
+}
+
+// Overloaded update function for view and proj only
+void UBO::update(mathplease::Matrix4 view, mathplease::Matrix4 proj) {
+    // proj(1, 1) *= -1;
+    mathplease::Matrix4 identity = mathplease::Matrix4::identity();
+    data.model = identity;
+    data.view = view;
+    data.proj = proj;
+    // data.proj(1, 1) *= -1; 
+
     std::memcpy(mapped, &data, sizeof(GlobalUniforms));
 }
 

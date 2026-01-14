@@ -7,7 +7,7 @@ layout(location = 3) in vec2 inUV;
 
 layout(location = 0) out vec3 fragColor;
 
-layout(binding = 0) uniform UniformBufferObject {
+layout(binding = 0) uniform GlobalUBO {
     mat4 model;
     mat4 view;
     mat4 proj;

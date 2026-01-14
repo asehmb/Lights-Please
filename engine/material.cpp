@@ -22,26 +22,20 @@ Material::~Material() {
 }
 
 void Material::createPipelineLayout(DescriptorLayouts& descriptorLayouts) {
-    // Create pipeline layout here if needed
-    VkDescriptorSetLayout globalLayout = descriptorLayouts.getGlobalLayout();
-    if (globalLayout == VK_NULL_HANDLE) {
-        throw std::runtime_error("Global descriptor layout is not initialized!");
-    }
+    // Create pipeline layout with all descriptor set layouts
+    std::vector<VkDescriptorSetLayout> layouts = descriptorLayouts.getAllLayouts();
+    
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 1;
-    pipelineLayoutInfo.pSetLayouts = &globalLayout;
-    pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
-    pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
-    std::vector<VkDescriptorSetLayout> layouts = descriptorLayouts.getAllLayouts();
     pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(layouts.size());
     pipelineLayoutInfo.pSetLayouts = layouts.data();
+    pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
+    pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
 
     if (vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create pipeline layout!");
     }
     LOG_INFO("MATERIAL", "Created Pipeline Layout");
-    
 }
 
 void Material::setDiffuseTexture(VkImageView textureView) {

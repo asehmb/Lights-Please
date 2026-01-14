@@ -23,5 +23,6 @@ public:
 
     void create(VkDevice device, VmaAllocator allocator);
     void update(mathplease::Matrix4 model, mathplease::Matrix4 view, mathplease::Matrix4 proj);
+    void update(mathplease::Matrix4 view, mathplease::Matrix4 proj);
     void cleanup(VmaAllocator allocator);
 };
