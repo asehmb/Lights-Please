@@ -5,7 +5,8 @@ layout(location = 1) in vec3 inColor;   // Matches 'colour' in your struct
 layout(location = 2) in vec3 inNormal;
 layout(location = 3) in vec2 inUV;
 
-layout(location = 0) out vec3 outColour;
+layout(location = 0) out vec3 fragColor;
+layout(location = 1) out vec2 fragTexCoord;
 
 layout(binding = 0) uniform GlobalUBO {
     mat4 model;
@@ -17,5 +18,6 @@ void main() {
     // Vulkan automatically pulls the correct data into these variables 
     // for the current vertex being processed.
     gl_Position = ubo.proj * ubo.view * ubo.model * vec4(inPosition, 1.0);
-    outColour = inColor;
+    fragColor = inColor;
+    fragTexCoord = inUV;
 }

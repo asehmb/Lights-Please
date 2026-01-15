@@ -26,15 +26,24 @@ public:
     Material(VkDevice device, VmaAllocator allocator, DescriptorLayouts& descriptorLayouts);
     ~Material();
 
+    void initializeDescriptorSets(class DescriptorAllocator* allocator);
+    void updateMaterialUBO();
+
     VkPipelineLayout pipelineLayout;
     std::shared_ptr<GraphicPipeline> pipeline;
     std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
+    
+    // Material-specific descriptor sets
+    VkDescriptorSet materialDescriptorSet{VK_NULL_HANDLE};
+    VkDescriptorSet textureDescriptorSet{VK_NULL_HANDLE};
 
 
     // Setters
     void setDiffuseTexture(VkImageView textureView);
     void setSpecularTexture(VkImageView textureView);
     void setNormalTexture(VkImageView textureView);
+    void updateTextureDescriptors(VkSampler sampler);
+    void setDefaultSampler(VkSampler sampler) { m_defaultSampler = sampler; }
 
     // Getters
     VkImageView getDiffuseTexture() const { return m_diffuseTexture; }
@@ -47,6 +56,7 @@ private:
     VmaAllocator m_allocator;
     VkImageView m_diffuseTexture;
     VkImageView m_specularTexture;
+    VkSampler m_defaultSampler;
     VkImageView m_normalTexture;
     UBO materialUBO;
 

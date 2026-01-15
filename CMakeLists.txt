@@ -28,6 +28,7 @@ add_executable(LightsPlease main.cpp
     engine/camera.cpp
     engine/ubo.cpp
     engine/loadModel.cpp
+    engine/texture.cpp
 )
 target_link_libraries(LightsPlease PRIVATE 
     SDL2::SDL2 

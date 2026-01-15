@@ -1,5 +1,5 @@
 #pragma once
-#include "mesh.h"
+
 #include "thread_pool.h"
 #include "renderer.h"
 #include <memory>
@@ -10,6 +10,10 @@ public:
     void run();
     void initialize();
     ~Engine();
+    
+    // Getters for application access
+    Renderer* getRenderer() const { return renderer.get(); }
+    
 private:
     void process_input();
     void update(float fixed_dt); // Fixed logic (Physics, AI)
@@ -21,7 +25,4 @@ private:
     std::shared_ptr<Camera> camera;
     std::unique_ptr<ThreadPool> thread_pool;
     std::unique_ptr<Renderer> renderer;
-    std::unique_ptr<Mesh> triangleMesh;
-    std::unique_ptr<Material> triangleMaterial;
-    std::shared_ptr<GraphicPipeline> trianglePipeline;
 };

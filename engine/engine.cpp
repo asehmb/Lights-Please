@@ -1,12 +1,8 @@
 #include "engine.h"
 #include "logger.h"
-#include "mesh.h"
-#include "pipeline.h"
 #include "platform.h"
 #include <chrono>
-#include <vector>
-#define TINYOBJLOADER_IMPLEMENTATION
-#include "loadModel.h"
+#include <memory>
 
 
 void Engine::initialize() {
@@ -19,41 +15,10 @@ void Engine::initialize() {
     
     // create camera
     camera = std::make_shared<Camera>();
-    Mesh::MeshData meshData;
-    modelsPlease::loadModelFromOBJ("models/Minion.obj", meshData.vertices, meshData.indices);
-
 
     // create renderer from platform window
-
     renderer = std::make_unique<Renderer>(platform::get_window_ptr());
-    // renderer->createTriangleDrawable();
     renderer->setCamera(camera);
-    
-    triangleMaterial = std::make_unique<Material>(
-        renderer->getVulkanDevice(),
-        renderer->getVmaAllocator(),
-        renderer->getDescriptorLayouts()
-    );
-    trianglePipeline = std::make_shared<GraphicPipeline>(
-        renderer->getVulkanDevice(),
-        renderer->getRenderPass(),
-        "shaders/triangle.vert.spv",
-        "shaders/triangle.frag.spv",
-        renderer->getSwapChainExtent(),
-        &triangleMaterial->pipelineLayout
-    );
-    triangleMesh = std::make_unique<Mesh>(
-        renderer->getVulkanDevice(),
-        renderer->getVmaAllocator(),
-        renderer->getCommandPool(),
-        renderer->getGraphicsQueue(),
-        meshData
-    );
-    triangleMaterial->pipeline = trianglePipeline;
-
-    // When passing it to the renderer, dereference it:
-    renderer->createDrawable(triangleMesh.get(), triangleMaterial.get());
-
 
     LOG_INFO("ENGINE", "Engine initialized with {} threads", thread_count);
 }

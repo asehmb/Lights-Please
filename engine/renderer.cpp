@@ -43,6 +43,7 @@ Renderer::Renderer(SDL_Window* window)
 			createUBOs();
 			createDescriptorSets();
 			writeCameraUBO();
+			createDefaultTextures();
 		}
 	}
 }
@@ -53,6 +54,7 @@ Renderer::~Renderer()
 {
 	vkDeviceWaitIdle(device);
 
+	cleanupTextures();
 	cleanupDescriptorSets();
 
 	if (!drawables.empty()) {
@@ -377,6 +379,10 @@ void Renderer::initLogicalDevice() {
 	createInfo.pQueueCreateInfos = queueCreateInfos.data();
 	createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
 	createInfo.ppEnabledExtensionNames = extensions.data();
+	// Device features
+	VkPhysicalDeviceFeatures deviceFeatures{};
+	deviceFeatures.samplerAnisotropy = VK_TRUE;
+	createInfo.pEnabledFeatures = &deviceFeatures;
 
 
 	if (vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) == VK_SUCCESS) {
@@ -395,6 +401,14 @@ void Renderer::initLogicalDevice() {
 			LOG_ERR("VMA", "Failed to create VMA allocator!");
 		} else {
 			LOG_INFO("VMA", "VMA allocator created successfully");
+		}
+
+		// Cache function pointers for Vulkan 2.0 functions
+		fp_vkCmdPipelineBarrier2 = (PFN_vkCmdPipelineBarrier2KHR)vkGetDeviceProcAddr(device, "vkCmdPipelineBarrier2KHR");
+		if (!fp_vkCmdPipelineBarrier2) {
+			LOG_ERR("LOGICAL_DEVICE", "Failed to get vkCmdPipelineBarrier2KHR function pointer!");
+		} else {
+			LOG_INFO("LOGICAL_DEVICE", "Cached vkCmdPipelineBarrier2KHR function pointer");
 		}
 	} else {
 		LOG_ERR("LOGICAL_DEVICE", "Failed to create logical device!");
@@ -418,9 +432,11 @@ VkSurfaceFormatKHR Renderer::chooseSwapSurfaceFormat(const std::vector<VkSurface
 	for (const auto& availableFormat : availableFormats) {
 		if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB &&
 			availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+			LOG_INFO("COLOUR SURFACE", "Using preferred SRGB colour format");
 			return availableFormat;
 		}
 	}
+	LOG_INFO("COLOUR SURFACE", "Using Default colours");
 	// Otherwise return the first available format
 	return availableFormats[0];
 }
@@ -675,14 +691,19 @@ void Renderer::recordCommandBuffer(uint32_t imageIndex) {
 				currentPipeline = drawable.material->pipeline.get();
 				vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, currentPipeline->m_pipeline);
 			}
-			// Bind descriptor sets, vertex buffers, index buffers, etc. here as needed
+			// Bind descriptor sets: global (camera), material, texture
+			std::vector<VkDescriptorSet> descriptorSets = {
+				globalDescriptorSets[imageIndex],           // Set 0: Global (camera)
+				drawable.material->materialDescriptorSet,   // Set 1: Material
+				drawable.material->textureDescriptorSet     // Set 2: Texture
+			};
 
 			vkCmdBindDescriptorSets(commandBuffer, 
 				VK_PIPELINE_BIND_POINT_GRAPHICS, 
 				drawable.material->pipelineLayout, 
 				0, 
-				1, 
-				&globalDescriptorSets[imageIndex], 
+				static_cast<uint32_t>(descriptorSets.size()), 
+				descriptorSets.data(), 
 				0, 
 				nullptr);
 
@@ -862,15 +883,12 @@ void Renderer::transitionImage(VkCommandBuffer commandBuffer,
 	dependencyInfo.bufferMemoryBarrierCount = 0;
 	dependencyInfo.pBufferMemoryBarriers = nullptr;
 
-	PFN_vkCmdPipelineBarrier2KHR fp_vkCmdPipelineBarrier2 = nullptr;
-	fp_vkCmdPipelineBarrier2 =
-		(PFN_vkCmdPipelineBarrier2KHR)
-		vkGetDeviceProcAddr(device, "vkCmdPipelineBarrier2KHR");
-
-	fp_vkCmdPipelineBarrier2(
-		commandBuffer,
-		&dependencyInfo
-	);
+	// Use cached function pointer
+	if (fp_vkCmdPipelineBarrier2) {
+		fp_vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
+	} else {
+		LOG_ERR("RENDERER", "vkCmdPipelineBarrier2KHR function pointer not available!");
+	}
 }
 
 void Renderer::drawMesh(VkCommandBuffer commandBuffer, Mesh* mesh) {
@@ -919,7 +937,7 @@ bool Renderer::createRenderPass() {
 
 	VkAttachmentDescription2 colorAttachment{};
 	colorAttachment.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2;
-	colorAttachment.format = swapchainImageFormat; // TODO: needs to be created
+	colorAttachment.format = swapchainImageFormat;
 	colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
 	colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE; // keep the rendered contents
@@ -1046,6 +1064,7 @@ void Renderer::createUBOs() {
 	for (uint32_t i = 0; i < imageCount; ++i) {
 		globalUBO[i].create(device, vmaAllocator); // Create UBO for each frame in flight
 	}
+	LOG_INFO("UBO", "Create UBOs");
 }
 
 void Renderer::cleanupUBOs() {
@@ -1072,6 +1091,7 @@ void Renderer::writeCameraUBO() {
 		write.dstSet = globalDescriptorSets[i];
 		vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
 	}
+	LOG_INFO("UBO", "Wrote Camera UBO");
 }
 
 void Renderer::createDescriptorSets() {
@@ -1082,10 +1102,207 @@ void Renderer::createDescriptorSets() {
 		VkDescriptorSet globalSet = descriptorAllocator->allocate(descriptorLayouts->getGlobalLayout());
 		globalDescriptorSets.push_back(globalSet);
 	}
+	LOG_INFO("DESCRIPTOR", "Created descriptor sets");
 }
 
 void Renderer::cleanupDescriptorSets() {
 	if (descriptorAllocator) {
 		descriptorAllocator.reset();
 	}
+}
+
+std::shared_ptr<Texture> Renderer::createTexture(const char* imagePath) {
+	
+	// 1. Create texture object + image
+	std::shared_ptr<Texture> texture = std::make_shared<Texture>();
+
+	texture->createImage(
+        device,
+        vmaAllocator,
+        physicalDevice,
+        imagePath
+    );
+
+    // 2. Create staging buffer + fill with pixel data
+    VkBuffer stagingBuffer;
+    VmaAllocation stagingAllocation;
+    texture->createStagingBuffer(
+        vmaAllocator,
+        stagingBuffer,
+        stagingAllocation
+    );
+
+    // 3. Begin one-time command buffer
+    VkCommandBuffer cmd = beginSingleTimeCommands();
+
+    // 4. Transition: UNDEFINED → TRANSFER_DST
+    transitionImage(
+        cmd,
+        texture->image,
+        VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        0,
+        VK_ACCESS_2_TRANSFER_WRITE_BIT
+    );
+
+    // 5. Copy buffer → image
+    VkBufferImageCopy region{};
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel = 0;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount = 1;
+    region.imageExtent = {
+        texture->width,
+        texture->height,
+        1
+    };
+
+    vkCmdCopyBufferToImage(
+        cmd,
+        stagingBuffer,
+        texture->image,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        1,
+        &region
+    );
+
+    // 6. Transition: TRANSFER_DST → SHADER_READ_ONLY
+    transitionImage(
+        cmd,
+        texture->image,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+        VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT
+    );
+
+    // 7. End + submit
+    endSingleTimeCommands(cmd);
+
+    // 8. Destroy staging buffer
+    vmaDestroyBuffer(vmaAllocator, stagingBuffer, stagingAllocation);
+
+    // 9. Create view + sampler
+    texture->createViewAndSampler(device);
+
+    return texture;
+}
+
+void Renderer::createDefaultTextures() {
+
+	// Create a simple 1x1 white texture
+	defaultWhiteTexture = std::make_shared<Texture>();
+	defaultWhiteTexture->create(device, vmaAllocator, physicalDevice, commandPool, graphicsQueue, "textures/white.jpg");
+
+	LOG_INFO("RENDERER", "Default textures created successfully");
+
+	VkSamplerCreateInfo samplerInfo{};
+	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+
+	samplerInfo.magFilter = VK_FILTER_LINEAR; // Magnification (close up)
+	samplerInfo.minFilter = VK_FILTER_LINEAR; // Minification (far away)
+
+	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+
+	samplerInfo.anisotropyEnable = VK_TRUE; 
+	samplerInfo.maxAnisotropy = 16.0f; // Check properties.limits.maxSamplerAnisotropy
+
+	samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+
+	samplerInfo.unnormalizedCoordinates = VK_FALSE;
+
+	samplerInfo.compareEnable = VK_FALSE;
+	samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+
+	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+	samplerInfo.mipLodBias = 0.0f;
+	samplerInfo.minLod = 0.0f;
+	samplerInfo.maxLod = VK_LOD_CLAMP_NONE; // Allow all mip levels
+
+	if (vkCreateSampler(device, &samplerInfo, nullptr, &defaultSampler) != VK_SUCCESS) {
+		throw std::runtime_error("failed to create texture sampler!");
+	}
+}
+
+void Renderer::cleanupTextures() {
+	// Explicitly cleanup all textures in the array
+	for (auto& texture : textures) {
+		if (texture) {
+			texture->cleanup(device, vmaAllocator);
+		}
+	}
+	textures.clear(); // Clear the texture array
+	
+	// Cleanup default textures
+	if (defaultWhiteTexture) {
+		defaultWhiteTexture->cleanup(device, vmaAllocator);
+		defaultWhiteTexture.reset();
+	}
+	
+	if (defaultSampler != VK_NULL_HANDLE) {
+		vkDestroySampler(device, defaultSampler, nullptr);
+		defaultSampler = VK_NULL_HANDLE;
+	}
+	
+	LOG_INFO("RENDERER", "Textures cleaned up");
+}
+
+// Texture array management methods
+size_t Renderer::addTexture(std::shared_ptr<Texture> texture) {
+	if (!texture) {
+		LOG_ERR("RENDERER", "Attempted to add null texture");
+		return SIZE_MAX; // Return invalid index
+	}
+	
+	textures.push_back(texture);
+	size_t index = textures.size() - 1;
+	LOG_INFO("RENDERER", "Added texture at index {}", index);
+	return index;
+}
+
+std::shared_ptr<Texture> Renderer::getTexture(size_t index) const {
+	if (index >= textures.size()) {
+		LOG_ERR("RENDERER", "Texture index {} out of range (max: {})", index, textures.size());
+		return nullptr;
+	}
+	return textures[index];
+}
+
+
+VkCommandBuffer Renderer::beginSingleTimeCommands() {
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandPool = commandPool;
+    allocInfo.commandBufferCount = 1;
+
+    VkCommandBuffer cmd;
+    vkAllocateCommandBuffers(device, &allocInfo, &cmd);
+
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    vkBeginCommandBuffer(cmd, &beginInfo);
+    return cmd;
+}
+
+void Renderer::endSingleTimeCommands(VkCommandBuffer cmd) {
+    vkEndCommandBuffer(cmd);
+
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &cmd;
+
+    vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+    vkQueueWaitIdle(graphicsQueue);
+
+    vkFreeCommandBuffers(device, commandPool, 1, &cmd);
 }

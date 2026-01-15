@@ -16,6 +16,7 @@
 #include "descriptor_allocator.h"
 #include "descriptor_layout.h"
 #include "ubo.h"
+#include "texture.h"
 
 #define MAX_FRAMES_IN_FLIGHT 3 // max is 3 because min is set to 2 and max is min+1 or less
 
@@ -71,10 +72,24 @@ public:
     VkRenderPass getRenderPass() const { return renderPass; }
     VkCommandPool getCommandPool() const { return commandPool; }
     VkQueue getGraphicsQueue() const { return graphicsQueue; }
+    VkPhysicalDevice getPhysicalDevice() const { return physicalDevice; }
 
     void setCamera(std::shared_ptr<Camera> cam) {
         camera = cam;
     }
+
+    // Texture management
+    std::shared_ptr<Texture> createTexture(const char* imagePath);
+    std::shared_ptr<Texture> getDefaultWhiteTexture() { return defaultWhiteTexture; }
+    VkSampler getDefaultSampler() const { return defaultSampler; }
+    
+    // Texture array management
+    size_t addTexture(std::shared_ptr<Texture> texture);
+    std::shared_ptr<Texture> getTexture(size_t index) const;
+    size_t getTextureCount() const { return textures.size(); }
+    
+    // Descriptor management
+    DescriptorAllocator* getDescriptorAllocator() const { return descriptorAllocator.get(); }
 
 
 private:
@@ -84,6 +99,7 @@ private:
     VkPhysicalDevice physicalDevice{VK_NULL_HANDLE};
     VkDevice device{VK_NULL_HANDLE};
     VmaAllocator vmaAllocator{VK_NULL_HANDLE}; // Memory allocator
+    PFN_vkCmdPipelineBarrier2KHR fp_vkCmdPipelineBarrier2{nullptr}; // Cached function pointer
     std::vector<const char*> validationLayers;
     VkDebugUtilsMessengerEXT debugMessenger{VK_NULL_HANDLE};
     bool enableValidationLayers{false};
@@ -126,6 +142,11 @@ private:
 
     std::shared_ptr<Camera> camera;
 
+    // Texture support
+    VkSampler defaultSampler{VK_NULL_HANDLE};
+    std::shared_ptr<Texture> defaultWhiteTexture;
+    std::vector<std::shared_ptr<Texture>> textures; // Array of loaded textures
+
 
     void initLogicalDevice();
     bool createSwapchain();
@@ -155,6 +176,14 @@ private:
 
     void createDescriptorSets();
     void cleanupDescriptorSets();
+
+    // Texture management
+    void createDefaultTextures();
+    void cleanupTextures();
+
+
+    VkCommandBuffer beginSingleTimeCommands();
+    void endSingleTimeCommands(VkCommandBuffer cmd);
 
     // TODO: refactor to use this structure for frame data
     //     struct FrameData {
