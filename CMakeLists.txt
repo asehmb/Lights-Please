@@ -8,7 +8,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(SDL2 REQUIRED)
 find_package(Vulkan REQUIRED)
-
+find_package(Gperftools QUIET)
 
 
 add_executable(LightsPlease main.cpp 
@@ -38,6 +38,20 @@ target_link_libraries(LightsPlease PRIVATE
 target_include_directories(LightsPlease SYSTEM PRIVATE 
     "${CMAKE_CURRENT_SOURCE_DIR}/engine/external"
 )
+
+if(Gperftools_FOUND)
+    target_link_libraries(LightsPlease PRIVATE Gperftools::profiler)
+else()
+    # Fallback for Homebrew paths if the package isn't found automatically
+    # Check if we are on Apple Silicon (/opt/homebrew) or Intel (/usr/local)
+    if(EXISTS "/opt/homebrew/lib/libprofiler.dylib")
+        target_link_libraries(LightsPlease PRIVATE "/opt/homebrew/lib/libprofiler.dylib")
+        target_include_directories(LightsPlease PRIVATE "/opt/homebrew/include")
+    else()
+        target_link_libraries(LightsPlease PRIVATE "/usr/local/lib/libprofiler.dylib")
+        target_include_directories(LightsPlease PRIVATE "/usr/local/include")
+    endif()
+endif()
 
 # Suppress warnings for external headers specifically
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")

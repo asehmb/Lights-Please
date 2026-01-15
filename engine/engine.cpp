@@ -20,7 +20,7 @@ void Engine::initialize() {
     // create camera
     camera = std::make_shared<Camera>();
     Mesh::MeshData meshData;
-    modelsPlease::loadModelFromOBJ("models/bigben.obj", meshData.vertices, meshData.indices);
+    modelsPlease::loadModelFromOBJ("models/Minion.obj", meshData.vertices, meshData.indices);
 
 
     // create renderer from platform window

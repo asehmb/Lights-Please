@@ -7,8 +7,10 @@ build/
 .vscode/
 
 .cache
-*.obj
-*.spv
+
+models/
+
+*.prof
 
 compile_commands.json
 
