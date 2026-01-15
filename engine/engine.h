@@ -1,7 +1,7 @@
 #pragma once
 
 #include "thread_pool.h"
-#include "renderer.h"
+#include "renderer/renderer.h"
 #include <memory>
 #include "camera.h"
 

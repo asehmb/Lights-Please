@@ -3,8 +3,8 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "texture.h"
 #include <stdexcept>
-#include "external/stb_image.h"
-#include "logger.h"
+#include "../external/stb_image.h"
+#include "../logger.h"
 #include <cstring>
 
 void Texture::createImage(VkDevice device, VmaAllocator allocator, VkPhysicalDevice physicalDevice, const char* imagePath) {

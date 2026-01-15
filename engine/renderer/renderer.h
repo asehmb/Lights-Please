@@ -8,8 +8,8 @@
 #include <optional>
 #include <vulkan/vulkan_core.h>
 #include <memory>
-#include "camera.h"
-#include "external/vk_mem_alloc.h"
+#include "../camera.h"
+#include "../external/vk_mem_alloc.h"
 #include "material.hpp"
 #include "mesh.h"
 // #include "pipeline.h"

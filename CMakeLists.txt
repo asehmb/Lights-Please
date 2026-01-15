@@ -17,18 +17,18 @@ add_executable(LightsPlease main.cpp
     engine/thread_pool.cpp
     engine/memory/pool_allocator.cpp
     engine/memory/linear_allocator.cpp
-    engine/renderer.cpp
+    engine/renderer/renderer.cpp
     engine/engine.cpp
-    engine/mesh.cpp
-    engine/material.cpp
-    engine/pipeline.cpp
-    engine/descriptor_allocator.cpp
-    engine/descriptor_layout.cpp
-    engine/vma_implementation.cpp
+    engine/renderer/mesh.cpp
+    engine/renderer/material.cpp
+    engine/renderer/pipeline.cpp
+    engine/renderer/descriptor_allocator.cpp
+    engine/renderer/descriptor_layout.cpp
+    engine/renderer/vma_implementation.cpp
     engine/camera.cpp
-    engine/ubo.cpp
+    engine/renderer/ubo.cpp
     engine/loadModel.cpp
-    engine/texture.cpp
+    engine/renderer/texture.cpp
 )
 target_link_libraries(LightsPlease PRIVATE 
     SDL2::SDL2 

@@ -1,7 +1,7 @@
 
 #include "pipeline.h"
-#include "logger.h"
-#include "geometry.h"
+#include "../logger.h"
+#include "../geometry.h"
 #include <cstddef>
 #include <vulkan/vulkan_core.h>
 #include <fstream>

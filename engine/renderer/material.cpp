@@ -1,5 +1,5 @@
 #include "material.hpp"
-#include "logger.h"
+#include "../logger.h"
 #include "vulkan/vulkan_core.h"
 #include "descriptor_allocator.h"
 

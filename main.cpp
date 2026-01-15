@@ -4,10 +4,10 @@
 #include "engine/engine.h"
 #include "engine/geometry.h"
 #include "engine/logger.h"
-#include "engine/mesh.h"
-#include "engine/material.hpp"
-#include "engine/pipeline.h"
-#include "engine/texture.h"
+#include "engine/renderer/mesh.h"
+#include "engine/renderer/material.hpp"
+#include "engine/renderer/pipeline.h"
+#include "engine/renderer/texture.h"
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "engine/loadModel.h"
 #include <memory>

@@ -1,7 +1,7 @@
-#include "external/vk_mem_alloc.h"
+#include "../external/vk_mem_alloc.h"
 
 #include "mesh.h"
-#include "logger.h"
+#include "../logger.h"
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
 #include <cstring>

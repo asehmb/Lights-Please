@@ -2,12 +2,12 @@
 
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
-#include "geometry.h"
+#include "../geometry.h"
 #include <vector>
 #ifndef VMA_INCLUDE_ONLY
 #define VMA_INCLUDE_ONLY
 #endif
-#include "external/vk_mem_alloc.h"
+#include "../external/vk_mem_alloc.h"
 
 enum class PrimitiveType {
     Quad,

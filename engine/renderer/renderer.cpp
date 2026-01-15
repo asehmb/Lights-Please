@@ -1,7 +1,7 @@
 #include "renderer.h"
 #include "descriptor_layout.h"
 
-#include "external/vk_mem_alloc.h"
+#include "../external/vk_mem_alloc.h"
 #include <SDL.h>
 #include <SDL_stdinc.h>
 #include <SDL_vulkan.h>
@@ -14,10 +14,10 @@
 #include <vulkan/vulkan_core.h>
 #include <vulkan/vulkan_beta.h>
 #include <vector>
-#include "logger.h"
+#include "../logger.h"
 #include <set>
 #include <cstring>
-#include "math/vector.hpp"
+#include "../math/vector.hpp"
 #include "ubo.h"
 	
 

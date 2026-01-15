@@ -1,9 +1,9 @@
 #pragma once
 
-#include "math/vector.hpp"
+#include "../math/vector.hpp"
 #include "vulkan/vulkan_core.h" 
 #define VMA_INCLUDE_ONLY
-#include "external/vk_mem_alloc.h"
+#include "../external/vk_mem_alloc.h"
 
 
 struct alignas(16) GlobalUniforms {

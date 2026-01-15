@@ -1,5 +1,5 @@
 #include "descriptor_layout.h"
-#include "logger.h"
+#include "../logger.h"
 
 // Static member definitions
 VkDescriptorSetLayout DescriptorLayouts::s_globalLayout = VK_NULL_HANDLE;

@@ -6,7 +6,7 @@
 #ifndef VMA_INCLUDE_ONLY
 #define VMA_INCLUDE_ONLY
 #endif
-#include "external/vk_mem_alloc.h"
+#include "../external/vk_mem_alloc.h"
 #include "descriptor_layout.h"
 #include "ubo.h"
 
