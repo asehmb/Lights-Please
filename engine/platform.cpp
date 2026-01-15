@@ -32,9 +32,9 @@ void init(int width, int height) {
 
     perf_freq = ::SDL_GetPerformanceFrequency();
     last_time = ::SDL_GetPerformanceCounter();
-    if (!SDL_SetRelativeMouseMode(SDL_TRUE)) {
-        SDL_Log("Failed to set relative mouse mode: %s", SDL_GetError());
-    }
+    // if (!SDL_SetRelativeMouseMode(SDL_TRUE)) {
+    //     SDL_Log("Failed to set relative mouse mode: %s", SDL_GetError());
+    // }
     SDL_SetWindowGrab(window, SDL_FALSE);
     window_width = width;
     window_height = height;

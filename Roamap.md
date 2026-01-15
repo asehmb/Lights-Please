@@ -43,6 +43,8 @@ Clean shutdown (no validation errors)
 Exit Criteria
 You can resize the window endlessly without crashes or validation errors.
 
+need to change the sampler creation
+
 🧠 Phase 3 — Engine Architecture (ECS)
 Deliverables
 Entity ID system

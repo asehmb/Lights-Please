@@ -590,6 +590,10 @@ bool Renderer::recreateSwapchain() {
 	createUBOs();
 	createDescriptorSets();
 	writeCameraUBO();
+	
+	// Recreate material descriptor sets for all drawables
+	recreateMaterialDescriptorSets();
+	
 	return true;
 }
 
@@ -1109,6 +1113,32 @@ void Renderer::cleanupDescriptorSets() {
 	if (descriptorAllocator) {
 		descriptorAllocator.reset();
 	}
+}
+
+void Renderer::recreateMaterialDescriptorSets() {
+	LOG_INFO("RENDERER", "Recreating material descriptor sets for {} drawables", drawables.size());
+	
+	// Recreate descriptor sets for all materials
+	for (auto& drawable : drawables) {
+		if (drawable.material) {
+			LOG_INFO("RENDERER", "Recreating descriptor sets for material");
+			drawable.material->initializeDescriptorSets(descriptorAllocator.get());
+			
+			// Update material UBO if needed
+			drawable.material->updateMaterialUBO();
+			
+			// Update texture descriptors if the material has textures
+			if (drawable.material->getDiffuseTexture() != VK_NULL_HANDLE) {
+				// Find a sampler to use - we can use the default sampler or get from texture
+				VkSampler sampler = getDefaultSampler(); 
+				if (sampler != VK_NULL_HANDLE) {
+					drawable.material->updateTextureDescriptors(sampler);
+				}
+			}
+		}
+	}
+	
+	LOG_INFO("RENDERER", "Material descriptor sets recreation completed");
 }
 
 std::shared_ptr<Texture> Renderer::createTexture(const char* imagePath) {

@@ -176,6 +176,7 @@ private:
 
     void createDescriptorSets();
     void cleanupDescriptorSets();
+    void recreateMaterialDescriptorSets();
 
     // Texture management
     void createDefaultTextures();

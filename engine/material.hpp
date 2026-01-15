@@ -49,6 +49,7 @@ public:
     VkImageView getDiffuseTexture() const { return m_diffuseTexture; }
     VkImageView getSpecularTexture() const { return m_specularTexture; }
     VkImageView getNormalTexture() const { return m_normalTexture; }
+    VkSampler getDefaultSampler() const { return m_defaultSampler; }
     void createPipelineLayout(DescriptorLayouts& descriptorLayouts);
     
 private:
