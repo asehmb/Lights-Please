@@ -3,8 +3,7 @@
 
 namespace mathplease {
 
-class Vector2 {
-public:
+struct Vector2 {
     float x;
     float y;
 
@@ -43,8 +42,7 @@ public:
     float distance(const Vector2& other) const;
 };
 
-class Vector3 {
-public:
+struct Vector3 {
     float x;
     float y;
     float z;
@@ -90,8 +88,7 @@ public:
     float distance(const mathplease::Vector3& other) const;
 };
 
-class Vector4 {
-public:
+struct Vector4 {
     float x;
     float y;
     float z;
@@ -132,8 +129,7 @@ public:
     mathplease::Vector3 xyz() const { return mathplease::Vector3(x, y, z); }
 };
 
-class Matrix4 {
-public:
+struct Matrix4 {
     // Storage: column-major order (like OpenGL/Vulkan)
     float m[16];
 

@@ -68,6 +68,22 @@ int main() {
     engine.getRenderer()->createDrawable(triangleMesh.get(), triangleMaterial.get());
     
     LOG_INFO("MAIN", "Application setup complete");
+
+
+    EntityManager* entityManager = engine.getEntityManager();
+    // create 10000 entities with Position and Velocity components
+    ComponentMask mask = 0;
+    mask |= Components::Position;
+    mask |= Components::Velocity;
+    for (int i = 0; i < 10000; ++i) {
+
+        Entity_id entityId = entityManager->createEntity(mask);
+        // Position* pos = (Position*)entityManager->getComponentData(entityId, Components::Position);
+        // Velocity* vel = (Velocity*)entityManager->getComponentData(entityId, Components::Velocity);
+        // pos->value = mathplease::Vector3(i * 1.0f, 0.0f, 0.0f);
+        // vel->value = mathplease::Vector3(0.0f, 0.1f, 0.0f);
+    }
+
     
     // Run the engine
     engine.run();

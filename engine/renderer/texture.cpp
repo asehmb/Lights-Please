@@ -138,16 +138,12 @@ void Texture::create(VkDevice device, VmaAllocator allocator, VkPhysicalDevice p
                      const char* imagePath) {
     // Load image using stb_image
     int texWidth, texHeight, texChannels;
-    stbi_uc* pixels = stbi_load(imagePath, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+    pixels = stbi_load(imagePath, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
     VkDeviceSize imageSize = texWidth * texHeight * 4;
 
     if (!pixels) {
         throw std::runtime_error(std::string("Failed to load texture image ") + imagePath + "!");
     }
-
-    // Create staging buffer
-
-
 }
 
 

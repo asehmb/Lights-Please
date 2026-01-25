@@ -12,6 +12,8 @@ public:
     VmaAllocation allocation = VK_NULL_HANDLE;
     VkImageView imageView = VK_NULL_HANDLE;
     VkSampler sampler = VK_NULL_HANDLE;
+
+    Texture() = default;
     
     // Image dimensions
     uint32_t width = 0;

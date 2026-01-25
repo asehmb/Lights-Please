@@ -16,6 +16,9 @@ void Engine::initialize() {
     // create camera
     camera = std::make_shared<Camera>();
 
+    // create entity manager
+    entity_manager_ptr = std::make_unique<EntityManager>();
+
     // create renderer from platform window
     renderer = std::make_unique<Renderer>(platform::get_window_ptr());
     renderer->setCamera(camera);

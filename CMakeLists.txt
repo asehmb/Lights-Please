@@ -29,6 +29,7 @@ add_executable(LightsPlease main.cpp
     engine/renderer/ubo.cpp
     engine/loadModel.cpp
     engine/renderer/texture.cpp
+    engine/entity.cpp
 )
 target_link_libraries(LightsPlease PRIVATE 
     SDL2::SDL2 
