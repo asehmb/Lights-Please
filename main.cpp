@@ -76,7 +76,7 @@ int main() {
     mask |= Components::Position;
     mask |= Components::Velocity;
     mask |= Components::Gravity;
-    for (int i = 0; i < 1500; ++i) {
+    for (int i = 0; i < 4000000; ++i) {
 
         Entity_id entityId = entityManager->createEntity(mask);
         // Position* pos = (Position*)entityManager->getComponentData(entityId, Components::Position);

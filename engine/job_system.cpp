@@ -26,7 +26,7 @@ void JobSystem::initialize(uint32_t threadCount) {
     isRunning = true;
     workers.reserve(threadCount);
     
-    LOG_INFO("JOB_SYSTEM", "Initializing with %d threads", threadCount);
+    LOG_INFO("JOB_SYSTEM", "Initializing with {} threads", threadCount);
 
     for (uint32_t i = 0; i < threadCount; ++i) {
         workers.emplace_back([this, i] { this->workerLoop(i); });

@@ -14,6 +14,15 @@ EntityManager::EntityManager() {
     entityCapacity = 4194304; // preallocate for 4 million entities 2^22
     nextEntityId = 1; // Start IDs from 1
     entityRecords.reserve(4194304);
+
+    // instantiate registry
+    ComponentRegistry::registerType<Position>();
+    ComponentRegistry::registerType<Velocity>();
+    ComponentRegistry::registerType<Health>();
+    ComponentRegistry::registerType<Renderable>();
+    // ComponentRegistry::registerType<AI>();
+    // ComponentRegistry::registerType<Gravity>();
+    ComponentRegistry::registerType<Transform>();
 }
 
 EntityManager::~EntityManager() {

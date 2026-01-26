@@ -50,14 +50,14 @@ void Engine::run() {
         process_input();
 
         // If we have enough unsimulated time, run a fixed step
-        while (accumulator >= dt) {
-            update(dt);
-            accumulator -= dt;
+        while (accumulator >= frame_time) {
+            update(frame_time);
+            accumulator -= frame_time;
         }
 
         // 'alpha' is how far we are between the current and next physics state
         // This is used for "interpolation" to make motion look smooth
-        float alpha = accumulator / dt;
+        float alpha = accumulator / frame_time;
         render(alpha);
 
         if (platform::should_close()) is_running = false;
