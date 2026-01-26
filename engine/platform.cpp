@@ -20,6 +20,10 @@ static mathplease::Vector2 relativeMousePos;
 static uint64_t last_time = 0;
 static uint64_t perf_freq = 0;
 
+// FPS calculation
+static int frame_count = 0;
+static float time_accum = 0.0f;
+
 void init(int width, int height) {
     ::SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER);
     
@@ -104,6 +108,22 @@ float delta_time() {
     uint64_t now = SDL_GetPerformanceCounter();
     float dt = (float)(now - last_time) / (float)perf_freq;
     last_time = now;
+    
+    // Update FPS stats
+    frame_count++;
+    time_accum += dt;
+    if (time_accum >= 1.0f) {
+        float fps = frame_count / time_accum;
+        float ms = (time_accum / frame_count) * 1000.0f;
+        
+        char title[256];
+        snprintf(title, sizeof(title), "Lights Please | FPS: %.1f | Frame Time: %.2f ms", fps, ms);
+        SDL_SetWindowTitle(window, title);
+        
+        frame_count = 0;
+        time_accum = 0.0f;
+    }
+
     return dt;
 }
 

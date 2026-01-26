@@ -14,7 +14,7 @@ find_package(Gperftools QUIET)
 add_executable(LightsPlease main.cpp 
     engine/math/vector.cpp 
     engine/platform.cpp
-    engine/thread_pool.cpp
+    engine/job_system.cpp
     engine/memory/pool_allocator.cpp
     engine/memory/linear_allocator.cpp
     engine/renderer/renderer.cpp
@@ -29,7 +29,8 @@ add_executable(LightsPlease main.cpp
     engine/renderer/ubo.cpp
     engine/loadModel.cpp
     engine/renderer/texture.cpp
-    engine/entity.cpp
+    engine/entity/entity.cpp
+    engine/entity/systems.cpp
 )
 target_link_libraries(LightsPlease PRIVATE 
     SDL2::SDL2 

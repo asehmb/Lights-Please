@@ -1,7 +1,6 @@
 #include "engine.h"
 #include "logger.h"
 #include "platform.h"
-#include <chrono>
 #include <memory>
 
 
@@ -9,9 +8,9 @@ void Engine::initialize() {
     is_running = true;
     platform::init(1280, 720);
 
-    // create thread pool with number of hardware threads
-    unsigned int thread_count = std::thread::hardware_concurrency();
-    thread_pool = std::make_unique<ThreadPool>(thread_count);
+    // create job system
+    job_system = std::make_unique<JobSystem>();
+    job_system->initialize(0);
     
     // create camera
     camera = std::make_shared<Camera>();
@@ -23,7 +22,8 @@ void Engine::initialize() {
     renderer = std::make_unique<Renderer>(platform::get_window_ptr());
     renderer->setCamera(camera);
 
-    LOG_INFO("ENGINE", "Engine initialized with {} threads", thread_count);
+    LOG_INFO("ENGINE", "Engine initialized");
+
 }
 
 Engine::~Engine() {
@@ -34,14 +34,13 @@ Engine::~Engine() {
 void Engine::run() {
     is_running = true;
 
-    using clock = std::chrono::high_resolution_clock;
-    auto last_time = clock::now();
     float accumulator = 0.0f;
 
+    // Reset platform timer to avoid large delta on first frame
+    platform::delta_time(); 
+
     while (is_running) {
-        auto current_time = clock::now();
-        float frame_time = std::chrono::duration<float>(current_time - last_time).count();
-        last_time = current_time;
+        float frame_time = platform::delta_time();
 
         // Prevent "Spiral of Death" (if game lags, don't try to catch up forever)
         if (frame_time > 0.25f) frame_time = 0.25f; 
@@ -50,7 +49,7 @@ void Engine::run() {
 
         process_input();
 
-        // If we have enough time accumulated, run a physics/logic step
+        // If we have enough unsimulated time, run a fixed step
         while (accumulator >= dt) {
             update(dt);
             accumulator -= dt;
@@ -73,7 +72,9 @@ void Engine::process_input() {
 
 void Engine::update(float fixed_dt) {
     // Update game logic, physics, AI, etc. here
-    // sumbit tasks to thread pool if needed
+    
+    // Run systems
+    gravitySystem.update(*entity_manager_ptr, job_system.get(), fixed_dt);
 
     // camera->update(fixed_dt);
     std::vector<Key> pressed_keys = platform::get_pressed_keys();
@@ -106,6 +107,8 @@ void Engine::update(float fixed_dt) {
     mathplease::Vector2 relative_mouse_pos = platform::get_relative_mouse_position();
     camera->yaw -= relative_mouse_pos.x * camera->mouseSensitivity * fixed_dt;
     camera->pitch -= relative_mouse_pos.y * camera->mouseSensitivity * fixed_dt;
+
+    // Update entity systems
 }
 
 void Engine::render(float alpha) {

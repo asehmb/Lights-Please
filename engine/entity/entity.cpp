@@ -1,5 +1,6 @@
 
 #include "entity.h"
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 
@@ -10,9 +11,9 @@ uint32_t alignUp(uint32_t offset, size_t alignment) {
 
 EntityManager::EntityManager() {
     entityCount = 0;
-    entityCapacity = 256;
+    entityCapacity = 4194304; // preallocate for 4 million entities 2^22
     nextEntityId = 1; // Start IDs from 1
-    entityRecords.reserve(256);
+    entityRecords.reserve(4194304);
 }
 
 EntityManager::~EntityManager() {
@@ -24,6 +25,10 @@ EntityManager::~EntityManager() {
     }
 }
 
+/*
+ * Creates a new entity with the specified component mask.
+ * Allocates space in an appropriate chunk and updates records.
+ */
 Entity_id EntityManager::createEntity(ComponentMask components) {
     ensureEntityCapacity();
 
@@ -44,22 +49,34 @@ Entity_id EntityManager::createEntity(ComponentMask components) {
 
     chunk->row++; // advance row for next entity
 
+    Entity_id finalId;
     if (freeEntityIds.empty()) {
         entityData.row = row;
         entityRecords.push_back(entityData);
         entityCount++;
-        return nextEntityId++;
+        finalId = nextEntityId++;
     } else {
         uint32_t reusedId = freeEntityIds.back();
         freeEntityIds.pop_back();
         entityRecords[(reusedId & ENTITY_INDEX)] = entityData;
-        return reusedId & ENTITY_INDEX | // get index
+        finalId = reusedId & ENTITY_INDEX | // get index
             (((reusedId & ENTITY_GENERATION) + 1) // increment generation
              & ENTITY_GENERATION); // wrap around generation
     }
 
+    // record id in chunk
+    Entity_id* ids = (Entity_id*)chunk->data;
+    ids[row] = finalId;
+
+
+    return finalId;
+
 }
 
+/*
+ * Ensures that the entity records array has enough capacity
+ * to store new entities, resizing if necessary.
+ */
 void EntityManager::ensureEntityCapacity() {
     if (entityCount >= entityCapacity) {
         entityCapacity = (entityCapacity == 0) ? 16 : entityCapacity * 2;
@@ -67,6 +84,10 @@ void EntityManager::ensureEntityCapacity() {
     }
 }
 
+/*
+ * Retrieves an existing archetype matching the component mask,
+ * or creates a new one if none exists.
+ */
 Archetype* EntityManager::getOrCreateArchetype(ComponentMask mask) {
     for (auto& archPtr : existingArchetypes) {
         if (archPtr->componentMask == mask) return archPtr.get();
@@ -75,7 +96,6 @@ Archetype* EntityManager::getOrCreateArchetype(ComponentMask mask) {
     auto newArch = std::make_unique<Archetype>();
     newArch->componentMask = mask;
 
-    // FIX 1: Reserve space for Entity_id at the start of the row
     // The ID array will always be at offset 0.
     size_t bytesPerEntity = sizeof(Entity_id); 
     
@@ -111,6 +131,10 @@ Archetype* EntityManager::getOrCreateArchetype(ComponentMask mask) {
     return existingArchetypes.back().get();
 }
 
+/*
+ * Returns a pointer to a chunk with available space for the given archetype.
+ * If no such chunk exists, a new one is allocated.
+ */
 Chunk* EntityManager::getOrCreateChunk(Archetype* archetype) {
     // 1. Check existing last chunk
     if (!archetype->chunks.empty()) {
@@ -227,7 +251,9 @@ Entity_id EntityManager::swapAndPopChunkRow(uint16_t rowToDelete, Chunk* chunk) 
     chunk->row--; 
     return movedId;
 }
-
+/*
+ * Destroys an entity, freeing its resources and updating records.
+ */
 void EntityManager::destroyEntity(Entity_id entity) {
     uint32_t index = entity & ENTITY_INDEX;
     if (index >= entityRecords.size()) return;
@@ -246,4 +272,120 @@ void EntityManager::destroyEntity(Entity_id entity) {
     tryMergeAndFreeChunk(chunk);
 
     entityCount--;
+}
+/*
+ * Returns pointer to component data for given entity and component type.
+ * Returns nullptr if entity does not have the component
+*/
+void* EntityManager::getComponentData(Entity_id entityId, ComponentMask component) {
+    uint32_t index = entityId & ENTITY_INDEX;
+    if (index >= entityRecords.size()) return nullptr;
+
+    EntityData& data = entityRecords[index];
+    Archetype* arch = data.archetype;
+
+    if (((arch->componentMask >> component) & 1) == 0) {
+        return nullptr; // Component not present
+    }
+
+    size_t size = arch->sizes[component];
+    size_t offset = arch->offsets[component];
+
+    std::byte* basePtr = (std::byte*)data.chunk->data;
+    return basePtr + offset + (data.row * size);
+}
+
+/*
+ * Adds a component to an entity, moving it to a new archetype if necessary.
+ */
+void EntityManager::addComponent(Entity_id entityId, ComponentMask component) {
+    uint32_t index = entityId & ENTITY_INDEX;
+    if (index >= entityRecords.size()) return;
+
+    EntityData& data = entityRecords[index];
+    ComponentMask newMask = data.archetype->componentMask | component;
+
+    if (newMask == data.archetype->componentMask) {
+        return; // Already has component
+    }
+
+    Archetype* newArchetype = getOrCreateArchetype(newMask);
+    Chunk* newChunk = getOrCreateChunk(newArchetype);
+    if (!newChunk) return; // Allocation failed
+
+    moveEntity(data.chunk, data.row, newChunk);
+
+    Entity_id movedEntity = swapAndPopChunkRow(data.row, data.chunk);
+    if (movedEntity != NULL_ENTITY) {
+        entityRecords[movedEntity & ENTITY_INDEX].row = data.row;
+    }
+
+    tryMergeAndFreeChunk(data.chunk);
+
+    data.archetype = newArchetype;
+    data.chunk = newChunk;
+    data.row = newChunk->row - 1; // Last added row
+}
+
+/*
+* Removes a component from an entity, moving it to a new archetype if necessary.
+*/
+void EntityManager::removeComponent(Entity_id entityId, ComponentMask component) {
+    uint32_t index = entityId & ENTITY_INDEX;
+    if (index >= entityRecords.size()) return;
+
+    EntityData& data = entityRecords[index];
+    ComponentMask newMask = data.archetype->componentMask & ~component;
+
+    if (newMask == data.archetype->componentMask) {
+        return; // Component not present
+    }
+
+    Archetype* newArchetype = getOrCreateArchetype(newMask);
+    Chunk* newChunk = getOrCreateChunk(newArchetype);
+    if (!newChunk) return; // Allocation failed
+
+    moveEntity(data.chunk, data.row, newChunk);
+
+    Entity_id movedEntity = swapAndPopChunkRow(data.row, data.chunk);
+    if (movedEntity != NULL_ENTITY) {
+        entityRecords[movedEntity & ENTITY_INDEX].row = data.row;
+    }
+
+    tryMergeAndFreeChunk(data.chunk);
+
+    data.archetype = newArchetype;
+    data.chunk = newChunk;
+    data.row = newChunk->row - 1; // Last added row
+}
+
+std::vector<Entity_id> EntityManager::getAllEntitiesWithComponents(ComponentMask components) {
+    std::vector<Entity_id> result;
+
+    for (const auto& entityData : entityRecords) {
+        if (entityData.archetype && 
+            (entityData.archetype->componentMask & components) == components) {
+            Entity_id* ids = (Entity_id*)entityData.chunk->data;
+            result.push_back(ids[entityData.row]);
+        }
+    }
+
+    return result;
+}
+
+std::vector<Archetype*>& EntityManager::getAllArchetypesWithComponent(ComponentMask component) {
+
+    auto it = archetypeMap.find(component);
+    if (it != archetypeMap.end()) {
+        return it->second;
+    }
+    
+    std::vector<Archetype*> result;
+    for (const auto& archPtr : existingArchetypes) {
+        if ((archPtr->componentMask & component) == component) {
+            result.push_back(archPtr.get());
+        }
+    }
+
+    return archetypeMap.emplace(component, result).first->second;
 }

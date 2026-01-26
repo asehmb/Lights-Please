@@ -1,8 +1,8 @@
 
 #include <SDL.h>
-#include <vector>
+// #include <vector>
 #include "engine/engine.h"
-#include "engine/geometry.h"
+// #include "engine/geometry.h"
 #include "engine/logger.h"
 #include "engine/renderer/mesh.h"
 #include "engine/renderer/material.hpp"
@@ -75,13 +75,24 @@ int main() {
     ComponentMask mask = 0;
     mask |= Components::Position;
     mask |= Components::Velocity;
-    for (int i = 0; i < 10000; ++i) {
+    mask |= Components::Gravity;
+    for (int i = 0; i < 1500; ++i) {
 
         Entity_id entityId = entityManager->createEntity(mask);
         // Position* pos = (Position*)entityManager->getComponentData(entityId, Components::Position);
         // Velocity* vel = (Velocity*)entityManager->getComponentData(entityId, Components::Velocity);
         // pos->value = mathplease::Vector3(i * 1.0f, 0.0f, 0.0f);
         // vel->value = mathplease::Vector3(0.0f, 0.1f, 0.0f);
+    }
+
+
+    for (int i = 0; i < 1000; ++i) {
+        Entity_id entityId = i; // assuming entity IDs are assigned sequentially starting from 0
+        entityManager->removeComponent(entityId, Components::Velocity);
+    }
+    for (int i = 1000; i < 1500; ++i) {
+        Entity_id entityId = i; // assuming entity IDs are assigned sequentially starting from 0
+        entityManager->addComponent(entityId, Components::Health);
     }
 
     

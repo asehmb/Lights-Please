@@ -291,6 +291,7 @@ bool Renderer::pickPhysicalDevice() {
 		// check if they meet your requirements
 		VkPhysicalDeviceProperties deviceProperties;
 		vkGetPhysicalDeviceProperties(device, &deviceProperties);
+		// deviceName is not null terminated
 		LOG_INFO("PHYSICAL_DEVICE", "\tDevice Name: {}", deviceProperties.deviceName);
 	}
 
@@ -418,8 +419,8 @@ void Renderer::initLogicalDevice() {
 VkPresentModeKHR Renderer::chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes) {
 	// Prefer MAILBOX if available, otherwise use FIFO which is guaranteed to be available
 	for (const auto& availablePresentMode : availablePresentModes) {
-		if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
-			LOG_INFO("VULKAN", "Selected VK_PRESENT_MODE_MAILBOX_KHR for swapchain");
+		if (availablePresentMode == VK_PRESENT_MODE_IMMEDIATE_KHR) {
+			LOG_INFO("VULKAN", "Selected VK_PRESENT_MODE_IMMEDIATE_KHR for swapchain");
 			return availablePresentMode;
 		}
 	}

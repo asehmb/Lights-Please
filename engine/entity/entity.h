@@ -1,8 +1,10 @@
 #pragma once
 #include <cstdint>
+#include <sys/types.h>
 #include <vector>
-#include "memory/pool_allocator.h"
-#include "math/vector.hpp"
+#include "../memory/pool_allocator.h"
+#include "../math/vector.hpp"
+#include <unordered_map>
 
 // chunk based ecs to minimize cache misses
 #define ENTITY_GENERATION 0xFFC00000 // 22 bits for index, 10 bits for generation
@@ -10,10 +12,10 @@
 
 #define NULL_ENTITY 0xFFFFFFFF
 
-using componentType = std::uint8_t;
 using Entity_id = std::uint32_t; // 4 billion entities should be enough
 
 using ComponentMask = uint16_t;
+
 
 namespace Components {
     constexpr ComponentMask Position   = 1 << 0;
@@ -21,6 +23,8 @@ namespace Components {
     constexpr ComponentMask Health     = 1 << 2;
     constexpr ComponentMask Renderable = 1 << 3;
     constexpr ComponentMask AI         = 1 << 4;
+    constexpr ComponentMask Gravity    = 1 << 5; // Requires velocity and position
+    constexpr ComponentMask Transform  = 1 << 6;
 }
 struct Entity {
     Entity_id id;
@@ -60,11 +64,11 @@ struct EntityData {
 };
 
 struct alignas(16) Position {
-    mathplease::Vector3 value;
+    mathplease::Vector4 value; // vector 4 for alignment
 };
 
 struct alignas(16) Velocity {
-    mathplease::Vector3 value;
+    mathplease::Vector4 value; // vector 4 for alignment
 };
 
 struct alignas(8) Health {
@@ -75,6 +79,11 @@ struct alignas(8) Renderable {
     std::uint32_t meshId;
     std::uint32_t materialId;
 };
+struct alignas(16) Transform {
+    mathplease::Vector4 position;
+    mathplease::Vector4 rotation; // Could be quaternion or Euler angles
+    mathplease::Vector4 scale;
+};
 
 class EntityManager {
 public:
@@ -82,8 +91,13 @@ public:
     ~EntityManager();
     Entity_id createEntity(ComponentMask components);
     void destroyEntity(Entity_id entityId);
-    void* getComponentData(Entity_id entityId, componentType component);
+    void* getComponentData(Entity_id entityId, ComponentMask component);
+    void addComponent(Entity_id entityId, ComponentMask component);
+    void removeComponent(Entity_id entityId, ComponentMask component);
+    std::vector<Entity_id> getAllEntitiesWithComponents(ComponentMask components);
+    std::vector<Archetype*>& getAllArchetypesWithComponent(ComponentMask component);
 private:
+    std::unordered_map<ComponentMask, std::vector<Archetype*>> archetypeMap;
     static constexpr std::size_t CHUNK_SIZE = 16 * 1024 ; // 16 KB
     std::vector<EntityData> entityRecords;
     std::vector<uint32_t> freeEntityIds;

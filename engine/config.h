@@ -2,6 +2,7 @@
 // Include this from headers that need to respect project-wide settings.
 #pragma once
 
+
 // Project-level way to disable logging across the codebase:
 // - Define LIGHTS_PLEASE_DISABLE_LOGS (e.g., via compiler flags) to force
 //   NDEBUG to be defined and make logging macros no-ops.

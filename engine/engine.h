@@ -1,10 +1,12 @@
 #pragma once
 
-#include "thread_pool.h"
+#include "job_system.h"
 #include "renderer/renderer.h"
 #include <memory>
 #include "camera.h"
-#include "entity.h"
+#include "entity/entity.h"
+
+#include "entity/systems.h"
 
 class Engine {
 public:
@@ -22,10 +24,12 @@ private:
     void render(float alpha);    // Variable rendering (Graphics)
     mathplease::Vector2 last_mouse_pos;
     std::unique_ptr<EntityManager> entity_manager_ptr;
+        GravitySystem gravitySystem;
+
 
     bool is_running = false;
     const float dt = 1.0f / 60.0f; // Target 60Hz for logic
     std::shared_ptr<Camera> camera;
-    std::unique_ptr<ThreadPool> thread_pool;
+    std::unique_ptr<JobSystem> job_system;
     std::unique_ptr<Renderer> renderer;
 };
