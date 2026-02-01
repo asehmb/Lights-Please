@@ -7,12 +7,13 @@
 #include <unordered_map>
 
 // chunk based ecs to minimize cache misses
-#define ENTITY_GENERATION 0xFFC00000 // 22 bits for index, 10 bits for generation
-#define ENTITY_INDEX      0x003FFFFF
+#define BITMASK_GENERATION 0xFFC00000 // 22 bits for index, 10 bits for generation
+#define BITMASK_INDEX      0x003FFFFF
 
 #define NULL_ENTITY 0xFFFFFFFF
 
 using Entity_id = std::uint32_t; // 4 billion entities should be enough
+using Transform_id = uint32_t;
 
 using ComponentMask = uint16_t;
 
@@ -24,7 +25,7 @@ namespace Components {
     constexpr ComponentMask Renderable = 1 << 3;
     constexpr ComponentMask AI         = 1 << 4;
     constexpr ComponentMask Gravity    = 1 << 5; // Requires velocity and position
-    constexpr ComponentMask Transform  = 1 << 6;
+    constexpr ComponentMask Transformable = 1 << 6;
 }
 struct Entity {
     Entity_id id;
@@ -79,11 +80,17 @@ struct alignas(8) Renderable {
     std::uint32_t meshId;
     std::uint32_t materialId;
 };
-struct alignas(16) Transform {
-    mathplease::Vector4 position;
-    mathplease::Vector4 rotation; // Could be quaternion or Euler angles
-    mathplease::Vector4 scale;
+struct alignas(8) AI {
+    uint8_t state;
+    uint8_t type;
+    float aggressionLevel;
 };
+struct Gravity {};
+
+struct alignas(4) Transformable {
+    Transform_id handle;
+};
+
 
 class EntityManager {
 public:

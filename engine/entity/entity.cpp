@@ -20,9 +20,9 @@ EntityManager::EntityManager() {
     ComponentRegistry::registerType<Velocity>();
     ComponentRegistry::registerType<Health>();
     ComponentRegistry::registerType<Renderable>();
-    // ComponentRegistry::registerType<AI>();
-    // ComponentRegistry::registerType<Gravity>();
-    ComponentRegistry::registerType<Transform>();
+    ComponentRegistry::registerType<AI>();
+    ComponentRegistry::registerType<Gravity>();
+    ComponentRegistry::registerType<Transformable>();
 }
 
 EntityManager::~EntityManager() {
@@ -67,10 +67,10 @@ Entity_id EntityManager::createEntity(ComponentMask components) {
     } else {
         uint32_t reusedId = freeEntityIds.back();
         freeEntityIds.pop_back();
-        entityRecords[(reusedId & ENTITY_INDEX)] = entityData;
-        finalId = reusedId & ENTITY_INDEX | // get index
-            (((reusedId & ENTITY_GENERATION) + 1) // increment generation
-             & ENTITY_GENERATION); // wrap around generation
+        entityRecords[(reusedId & BITMASK_INDEX)] = entityData;
+        finalId = reusedId & BITMASK_INDEX | // get index
+            (((reusedId & BITMASK_GENERATION) + 1) // increment generation
+             & BITMASK_GENERATION); // wrap around generation
     }
 
     // record id in chunk
@@ -191,8 +191,8 @@ void EntityManager::moveEntity(Chunk* srcChunk, uint32_t srcRow, Chunk* dstChunk
     dstIds[dstRow] = id;
 
     // 3. Update Global Record
-    entityRecords[id & ENTITY_INDEX].chunk = dstChunk;
-    entityRecords[id & ENTITY_INDEX].row = dstRow;
+    entityRecords[id & BITMASK_INDEX].chunk = dstChunk;
+    entityRecords[id & BITMASK_INDEX].row = dstRow;
 
     // 4. Update Destination Count
     dstChunk->row++;
@@ -264,7 +264,7 @@ Entity_id EntityManager::swapAndPopChunkRow(uint16_t rowToDelete, Chunk* chunk) 
  * Destroys an entity, freeing its resources and updating records.
  */
 void EntityManager::destroyEntity(Entity_id entity) {
-    uint32_t index = entity & ENTITY_INDEX;
+    uint32_t index = entity & BITMASK_INDEX;
     if (index >= entityRecords.size()) return;
 
     EntityData& data = entityRecords[index];
@@ -275,7 +275,7 @@ void EntityManager::destroyEntity(Entity_id entity) {
     Entity_id movedEntity = swapAndPopChunkRow(data.row, chunk);
 
     if (movedEntity != NULL_ENTITY) {
-        entityRecords[movedEntity & ENTITY_INDEX].row = data.row;
+        entityRecords[movedEntity & BITMASK_INDEX].row = data.row;
     }
 
     tryMergeAndFreeChunk(chunk);
@@ -287,7 +287,7 @@ void EntityManager::destroyEntity(Entity_id entity) {
  * Returns nullptr if entity does not have the component
 */
 void* EntityManager::getComponentData(Entity_id entityId, ComponentMask component) {
-    uint32_t index = entityId & ENTITY_INDEX;
+    uint32_t index = entityId & BITMASK_INDEX;
     if (index >= entityRecords.size()) return nullptr;
 
     EntityData& data = entityRecords[index];
@@ -308,7 +308,7 @@ void* EntityManager::getComponentData(Entity_id entityId, ComponentMask componen
  * Adds a component to an entity, moving it to a new archetype if necessary.
  */
 void EntityManager::addComponent(Entity_id entityId, ComponentMask component) {
-    uint32_t index = entityId & ENTITY_INDEX;
+    uint32_t index = entityId & BITMASK_INDEX;
     if (index >= entityRecords.size()) return;
 
     EntityData& data = entityRecords[index];
@@ -326,7 +326,7 @@ void EntityManager::addComponent(Entity_id entityId, ComponentMask component) {
 
     Entity_id movedEntity = swapAndPopChunkRow(data.row, data.chunk);
     if (movedEntity != NULL_ENTITY) {
-        entityRecords[movedEntity & ENTITY_INDEX].row = data.row;
+        entityRecords[movedEntity & BITMASK_INDEX].row = data.row;
     }
 
     tryMergeAndFreeChunk(data.chunk);
@@ -340,7 +340,7 @@ void EntityManager::addComponent(Entity_id entityId, ComponentMask component) {
 * Removes a component from an entity, moving it to a new archetype if necessary.
 */
 void EntityManager::removeComponent(Entity_id entityId, ComponentMask component) {
-    uint32_t index = entityId & ENTITY_INDEX;
+    uint32_t index = entityId & BITMASK_INDEX;
     if (index >= entityRecords.size()) return;
 
     EntityData& data = entityRecords[index];
@@ -358,7 +358,7 @@ void EntityManager::removeComponent(Entity_id entityId, ComponentMask component)
 
     Entity_id movedEntity = swapAndPopChunkRow(data.row, data.chunk);
     if (movedEntity != NULL_ENTITY) {
-        entityRecords[movedEntity & ENTITY_INDEX].row = data.row;
+        entityRecords[movedEntity & BITMASK_INDEX].row = data.row;
     }
 
     tryMergeAndFreeChunk(data.chunk);

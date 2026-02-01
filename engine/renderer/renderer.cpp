@@ -419,7 +419,7 @@ void Renderer::initLogicalDevice() {
 VkPresentModeKHR Renderer::chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes) {
 	// Prefer MAILBOX if available, otherwise use FIFO which is guaranteed to be available
 	for (const auto& availablePresentMode : availablePresentModes) {
-		if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
+		if (availablePresentMode == VK_PRESENT_MODE_IMMEDIATE_KHR) {
 			LOG_INFO("VULKAN", "Selected VK_PRESENT_MODE_MAILBOX_KHR for swapchain");
 			return availablePresentMode;
 		}
@@ -711,6 +711,8 @@ void Renderer::recordCommandBuffer(uint32_t imageIndex) {
 				descriptorSets.data(), 
 				0, 
 				nullptr);
+			
+
 
 			drawMesh(commandBuffer, drawable.mesh);
 		} else {
@@ -743,12 +745,17 @@ VkPipelineLayout Renderer::createPipelineLayout() {
 	// Create a simple pipeline layout with our descriptor set layouts
 	auto layouts = DescriptorLayouts::getAllLayouts();
 	
+	VkPushConstantRange pushConstant;
+	pushConstant.offset = 0;
+	pushConstant.size = sizeof(mathplease::Matrix4);
+	pushConstant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
 	VkPipelineLayoutCreateInfo layoutInfo{};
 	layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	layoutInfo.setLayoutCount = static_cast<uint32_t>(layouts.size());
 	layoutInfo.pSetLayouts = layouts.data();
-	layoutInfo.pushConstantRangeCount = 0; // No push constants for now
-	layoutInfo.pPushConstantRanges = nullptr;
+	layoutInfo.pushConstantRangeCount = 1;
+	layoutInfo.pPushConstantRanges = &pushConstant;
 	
 	VkPipelineLayout pipelineLayout;
 	if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {

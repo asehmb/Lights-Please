@@ -25,6 +25,7 @@ public:
     struct Drawable { // small struct to hold a mesh and its material
         Mesh* mesh;
         Material* material;
+        mathplease::Matrix4 transform = mathplease::Matrix4::identity();
     };
 
     struct QueueFamilyIndices {
