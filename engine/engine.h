@@ -5,8 +5,8 @@
 #include <memory>
 #include "camera.h"
 #include "entity/entity.h"
-
 #include "entity/systems.h"
+#include "entity/renderSystem.h"
 
 class Engine {
 public:
@@ -17,6 +17,7 @@ public:
     // Getters for application access
     Renderer* getRenderer() const { return renderer.get(); }
     EntityManager* getEntityManager() { return entity_manager_ptr.get(); }
+    RenderSystem* getRenderSystem() { return &renderSystem; }
     
 private:
     void process_input();
@@ -24,7 +25,8 @@ private:
     void render(float alpha);    // Variable rendering (Graphics)
     mathplease::Vector2 last_mouse_pos;
     std::unique_ptr<EntityManager> entity_manager_ptr;
-        GravitySystem gravitySystem;
+    GravitySystem gravitySystem;
+    RenderSystem renderSystem;
 
 
     bool is_running = false;

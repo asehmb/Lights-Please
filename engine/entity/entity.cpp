@@ -12,7 +12,7 @@ uint32_t alignUp(uint32_t offset, size_t alignment) {
 EntityManager::EntityManager() {
     entityCount = 0;
     entityCapacity = 4194304; // preallocate for 4 million entities 2^22
-    nextEntityId = 1; // Start IDs from 1
+    nextEntityId = 0;
     entityRecords.reserve(4194304);
 
     // instantiate registry
@@ -170,18 +170,22 @@ Chunk* EntityManager::getOrCreateChunk(Archetype* archetype) {
 
 // Helper: Moves a single entity from one chunk to another
 void EntityManager::moveEntity(Chunk* srcChunk, uint32_t srcRow, Chunk* dstChunk) {
-    Archetype* arch = srcChunk->archetype;
+    Archetype* srcArch = srcChunk->archetype;
+    Archetype* dstArch = dstChunk->archetype;
     uint32_t dstRow = dstChunk->row;
 
     // 1. Copy Components
     for (int i = 0; i < 16; ++i) {
-        if (arch->sizes[i] == 0) continue;
-        size_t size = arch->sizes[i];
-        size_t offset = arch->offsets[i];
+        if (srcArch->sizes[i] == 0 || dstArch->sizes[i] == 0) continue;
+        size_t srcSize = srcArch->sizes[i];
+        size_t dstSize = dstArch->sizes[i];
+        size_t copySize = std::min(srcSize, dstSize);
+        size_t srcOffset = srcArch->offsets[i];
+        size_t dstOffset = dstArch->offsets[i];
 
-        std::byte* srcPtr = (std::byte*)srcChunk->data + offset + (srcRow * size);
-        std::byte* dstPtr = (std::byte*)dstChunk->data + offset + (dstRow * size);
-        std::memcpy(dstPtr, srcPtr, size);
+        std::byte* srcPtr = (std::byte*)srcChunk->data + srcOffset + (srcRow * srcSize);
+        std::byte* dstPtr = (std::byte*)dstChunk->data + dstOffset + (dstRow * dstSize);
+        std::memcpy(dstPtr, srcPtr, copySize);
     }
 
     // 2. Copy ID
@@ -293,12 +297,13 @@ void* EntityManager::getComponentData(Entity_id entityId, ComponentMask componen
     EntityData& data = entityRecords[index];
     Archetype* arch = data.archetype;
 
-    if (((arch->componentMask >> component) & 1) == 0) {
+    if ((arch->componentMask & component) == 0) {
         return nullptr; // Component not present
     }
 
-    size_t size = arch->sizes[component];
-    size_t offset = arch->offsets[component];
+    uint8_t componentIndex = componentMaskToIndex(component);
+    size_t size = arch->sizes[componentIndex];
+    size_t offset = arch->offsets[componentIndex];
 
     std::byte* basePtr = (std::byte*)data.chunk->data;
     return basePtr + offset + (data.row * size);

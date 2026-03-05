@@ -53,6 +53,7 @@ public:
     void addDrawable(const Drawable& drawable) {
         drawables.push_back(drawable);
     }
+    void clearDrawables() { drawables.clear(); }
 
     Drawable& getDrawable(size_t index) {
         return drawables[index];
@@ -65,6 +66,12 @@ public:
     }
     
     void createTriangleDrawable();
+    std::unique_ptr<Material> createMaterial(const char* texturePath,
+                                             const char* vertexShaderPath,
+                                             const char* fragmentShaderPath);
+    std::unique_ptr<Mesh> createMesh(const Mesh::MeshData& data);
+    std::unique_ptr<Mesh> createAxisMesh(float axisLength = 2.0f,
+                                         float axisWidth = 0.05f);
     void drawFrame();
     VkDevice getVulkanDevice() const { return device; }
     VmaAllocator getVmaAllocator() const { return vmaAllocator; }

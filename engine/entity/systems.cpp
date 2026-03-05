@@ -15,8 +15,8 @@ void GravitySystem::update(EntityManager& entityManager, JobSystem* jobSystem, f
 
     JobCounter counter = {};
     for (Archetype* archetype : archetypes) {
-        uint32_t posOffset = archetype->offsets[Components::Position];
-        uint32_t velOffset = archetype->offsets[Components::Velocity];
+        uint32_t posOffset = archetype->offsets[componentMaskToIndex(Components::Position)];
+        uint32_t velOffset = archetype->offsets[componentMaskToIndex(Components::Velocity)];
 
         // Iterate through all chunks in the archetype
         for (Chunk* chunk : archetype->chunks) {

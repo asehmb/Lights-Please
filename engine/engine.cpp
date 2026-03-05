@@ -115,6 +115,7 @@ void Engine::render(float alpha) {
     // Render the current frame here
     // Use 'alpha' for interpolating between physics states if needed
     if (renderer) {
+        renderSystem.update(*entity_manager_ptr, *renderer);
         renderer->drawFrame();
     } else{
         LOG_ERR("ENGINE", "Renderer doesnt exist??");

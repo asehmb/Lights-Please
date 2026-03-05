@@ -1149,6 +1149,80 @@ void Renderer::recreateMaterialDescriptorSets() {
 	LOG_INFO("RENDERER", "Material descriptor sets recreation completed");
 }
 
+std::unique_ptr<Material> Renderer::createMaterial(const char* texturePath,
+												   const char* vertexShaderPath,
+												   const char* fragmentShaderPath) {
+	std::unique_ptr<Material> material =
+		std::make_unique<Material>(device, vmaAllocator, *descriptorLayouts);
+
+	std::shared_ptr<Texture> texture = createTexture(texturePath);
+	addTexture(texture);
+
+	material->setDiffuseTexture(texture->imageView);
+	material->setDefaultSampler(texture->sampler);
+	material->initializeDescriptorSets(descriptorAllocator.get());
+
+	material->pipeline = std::make_shared<GraphicPipeline>(
+		device, renderPass, vertexShaderPath, fragmentShaderPath, swapchainExtent,
+		&material->pipelineLayout);
+
+	return material;
+}
+
+std::unique_ptr<Mesh> Renderer::createMesh(const Mesh::MeshData& data) {
+	return std::make_unique<Mesh>(device, vmaAllocator, commandPool, graphicsQueue,
+								  data);
+}
+
+std::unique_ptr<Mesh> Renderer::createAxisMesh(float axisLength, float axisWidth) {
+	Mesh::MeshData axisMeshData;
+
+	auto addBox = [&](float x, float y, float z, float sx, float sy, float sz,
+					  mathplease::Vector3 color) {
+		uint32_t base = static_cast<uint32_t>(axisMeshData.vertices.size());
+
+		struct P {
+			float x, y, z;
+		};
+
+		P pts[] = {{x, y, z},
+				   {x + sx, y, z},
+				   {x + sx, y + sy, z},
+				   {x, y + sy, z},
+				   {x, y, z + sz},
+				   {x + sx, y, z + sz},
+				   {x + sx, y + sy, z + sz},
+				   {x, y + sy, z + sz}};
+
+		for (const auto& pt : pts) {
+			Vertex v{};
+			v.pos = {pt.x, pt.y, pt.z};
+			v.colour = color;
+			v.normal = {0, 0, 1};
+			v.uv = {0, 0};
+			axisMeshData.vertices.push_back(v);
+		}
+
+		uint32_t idxs[] = {
+			base + 0, base + 2, base + 1, base + 0, base + 3, base + 2,
+			base + 4, base + 5, base + 6, base + 4, base + 6, base + 7,
+			base + 0, base + 4, base + 7, base + 0, base + 7, base + 3,
+			base + 1, base + 6, base + 5, base + 1, base + 2, base + 6,
+			base + 0, base + 1, base + 5, base + 0, base + 5, base + 4,
+			base + 3, base + 6, base + 2, base + 3, base + 7, base + 6};
+
+		for (uint32_t i : idxs) {
+			axisMeshData.indices.push_back(i);
+		}
+	};
+
+	addBox(0, 0, 0, axisLength, axisWidth, axisWidth, {1.0f, 0.0f, 0.0f});
+	addBox(0, 0, 0, axisWidth, axisLength, axisWidth, {0.0f, 1.0f, 0.0f});
+	addBox(0, 0, 0, axisWidth, axisWidth, axisLength, {0.0f, 0.0f, 1.0f});
+
+	return createMesh(axisMeshData);
+}
+
 std::shared_ptr<Texture> Renderer::createTexture(const char* imagePath) {
 	
 	// 1. Create texture object + image

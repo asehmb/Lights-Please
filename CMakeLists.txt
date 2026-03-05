@@ -11,8 +11,8 @@ find_package(Vulkan REQUIRED)
 find_package(Gperftools QUIET)
 
 
-add_executable(LightsPlease main.cpp 
-    engine/math/vector.cpp 
+add_executable(LightsPlease main.cpp
+    engine/math/vector.cpp
     engine/platform.cpp
     engine/job_system.cpp
     engine/memory/pool_allocator.cpp
@@ -30,16 +30,17 @@ add_executable(LightsPlease main.cpp
     engine/loadModel.cpp
     engine/renderer/texture.cpp
     engine/entity/entity.cpp
+    engine/entity/renderSystem.cpp
     engine/entity/systems.cpp
     # engine/entity/sceneGraph.cpp
 )
-target_link_libraries(LightsPlease PRIVATE 
-    SDL2::SDL2 
+target_link_libraries(LightsPlease PRIVATE
+    SDL2::SDL2
     Vulkan::Vulkan
 )
 
 # Add external headers as SYSTEM to suppress warnings
-target_include_directories(LightsPlease SYSTEM PRIVATE 
+target_include_directories(LightsPlease SYSTEM PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/engine/external"
 )
 
@@ -68,3 +69,70 @@ endif()
 set_target_properties(LightsPlease PROPERTIES
     OUTPUT_NAME "Lights Please"
 )
+
+enable_testing()
+add_executable(render_system_tests
+    tests/render_system_test.cpp
+    engine/entity/entity.cpp
+    engine/entity/renderSystem.cpp
+    engine/memory/pool_allocator.cpp
+    engine/math/vector.cpp
+)
+target_link_libraries(render_system_tests PRIVATE
+    SDL2::SDL2
+    Vulkan::Vulkan
+)
+add_test(NAME render_system_tests COMMAND render_system_tests)
+
+add_executable(math_vector_tests
+    tests/math_vector_test.cpp
+    engine/math/vector.cpp
+)
+add_test(NAME math_vector_tests COMMAND math_vector_tests)
+
+add_executable(allocator_tests
+    tests/allocator_test.cpp
+    engine/memory/pool_allocator.cpp
+    engine/memory/linear_allocator.cpp
+)
+add_test(NAME allocator_tests COMMAND allocator_tests)
+
+add_executable(entity_manager_tests
+    tests/entity_manager_test.cpp
+    engine/entity/entity.cpp
+    engine/memory/pool_allocator.cpp
+    engine/math/vector.cpp
+)
+add_test(NAME entity_manager_tests COMMAND entity_manager_tests)
+
+add_executable(job_system_tests
+    tests/job_system_test.cpp
+    engine/job_system.cpp
+)
+add_test(NAME job_system_tests COMMAND job_system_tests)
+
+add_executable(gravity_system_tests
+    tests/gravity_system_test.cpp
+    engine/entity/entity.cpp
+    engine/entity/systems.cpp
+    engine/job_system.cpp
+    engine/memory/pool_allocator.cpp
+    engine/math/vector.cpp
+)
+add_test(NAME gravity_system_tests COMMAND gravity_system_tests)
+
+add_executable(camera_tests
+    tests/camera_test.cpp
+    engine/camera.cpp
+    engine/math/vector.cpp
+)
+target_link_libraries(camera_tests PRIVATE
+    SDL2::SDL2
+)
+add_test(NAME camera_tests COMMAND camera_tests)
+
+add_executable(load_model_tests
+    tests/load_model_test.cpp
+    engine/loadModel.cpp
+)
+add_test(NAME load_model_tests COMMAND load_model_tests)
