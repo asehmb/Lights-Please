@@ -1,5 +1,3 @@
-/target
-lights-please
 *.o
 build/
 .idea/
@@ -8,11 +6,8 @@ build/
 
 .cache
 
-models/
-textures/
 *.trace
 
 *.prof
 
 compile_commands.json
-

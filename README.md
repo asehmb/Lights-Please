@@ -21,7 +21,6 @@ Roadmap notes live in [`Roamap.md`](./Roamap.md).
 - Ninja (recommended generator)
 - SDL2 development libraries
 - Vulkan SDK/runtime
-- Optional: `gperftools` (`libprofiler`) for profiling linkage
 
 ## Build
 
