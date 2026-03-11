@@ -108,7 +108,9 @@ void Engine::update(float fixed_dt) {
     camera->yaw -= relative_mouse_pos.x * camera->mouseSensitivity * fixed_dt;
     camera->pitch -= relative_mouse_pos.y * camera->mouseSensitivity * fixed_dt;
 
-    // Update entity systems
+    if (frameUpdateHook) {
+        frameUpdateHook(*this);
+    }
 }
 
 void Engine::render(float alpha) {

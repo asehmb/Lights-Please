@@ -1152,12 +1152,24 @@ void Renderer::recreateMaterialDescriptorSets() {
 std::unique_ptr<Material> Renderer::createMaterial(const char* texturePath,
 												   const char* vertexShaderPath,
 												   const char* fragmentShaderPath) {
+	return createMaterialFromTexture(createTexture(texturePath), vertexShaderPath,
+									 fragmentShaderPath);
+}
+
+std::unique_ptr<Material>
+Renderer::createMaterialFromTexture(std::shared_ptr<Texture> texture,
+									const char *vertexShaderPath,
+									const char *fragmentShaderPath) {
+	if (!texture || texture->imageView == VK_NULL_HANDLE ||
+		texture->sampler == VK_NULL_HANDLE) {
+		throw std::runtime_error(
+			"createMaterialFromTexture requires an initialized texture");
+	}
+
 	std::unique_ptr<Material> material =
 		std::make_unique<Material>(device, vmaAllocator, *descriptorLayouts);
 
-	std::shared_ptr<Texture> texture = createTexture(texturePath);
 	addTexture(texture);
-
 	material->setDiffuseTexture(texture->imageView);
 	material->setDefaultSampler(texture->sampler);
 	material->initializeDescriptorSets(descriptorAllocator.get());
@@ -1302,6 +1314,113 @@ std::shared_ptr<Texture> Renderer::createTexture(const char* imagePath) {
     texture->createViewAndSampler(device);
 
     return texture;
+}
+
+std::shared_ptr<Texture>
+Renderer::createTextureFromData(uint32_t width, uint32_t height,
+								uint32_t channels,
+								const std::vector<std::uint8_t> &pixels) {
+	if (width == 0 || height == 0 || (channels != 3 && channels != 4)) {
+		throw std::runtime_error("createTextureFromData received invalid dimensions");
+	}
+
+	const std::size_t sourcePixelCount =
+		static_cast<std::size_t>(width) * static_cast<std::size_t>(height) *
+		static_cast<std::size_t>(channels);
+	if (pixels.size() < sourcePixelCount) {
+		throw std::runtime_error("createTextureFromData received incomplete data");
+	}
+
+	std::vector<std::uint8_t> rgbaPixels;
+	rgbaPixels.reserve(static_cast<std::size_t>(width) * height * 4);
+	if (channels == 4) {
+		rgbaPixels.assign(pixels.begin(), pixels.begin() + sourcePixelCount);
+	} else {
+		for (std::size_t i = 0; i < sourcePixelCount; i += 3) {
+			rgbaPixels.push_back(pixels[i + 0]);
+			rgbaPixels.push_back(pixels[i + 1]);
+			rgbaPixels.push_back(pixels[i + 2]);
+			rgbaPixels.push_back(255);
+		}
+	}
+
+	std::shared_ptr<Texture> texture = std::make_shared<Texture>();
+	texture->width = width;
+	texture->height = height;
+	texture->channels = 4;
+
+	VkImageCreateInfo imageInfo{};
+	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	imageInfo.imageType = VK_IMAGE_TYPE_2D;
+	imageInfo.extent.width = width;
+	imageInfo.extent.height = height;
+	imageInfo.extent.depth = 1;
+	imageInfo.mipLevels = 1;
+	imageInfo.arrayLayers = 1;
+	imageInfo.format = VK_FORMAT_R8G8B8A8_SRGB;
+	imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+	VmaAllocationCreateInfo imageAllocInfo{};
+	imageAllocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+	if (vmaCreateImage(vmaAllocator, &imageInfo, &imageAllocInfo, &texture->image,
+					   &texture->allocation, nullptr) != VK_SUCCESS) {
+		throw std::runtime_error("Failed to create image for createTextureFromData");
+	}
+
+	const VkDeviceSize imageSize = static_cast<VkDeviceSize>(rgbaPixels.size());
+	VkBuffer stagingBuffer = VK_NULL_HANDLE;
+	VmaAllocation stagingAllocation = VK_NULL_HANDLE;
+	VkBufferCreateInfo stagingBufferInfo{};
+	stagingBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	stagingBufferInfo.size = imageSize;
+	stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+	stagingBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+	VmaAllocationCreateInfo stagingAllocInfo{};
+	stagingAllocInfo.usage = VMA_MEMORY_USAGE_CPU_ONLY;
+	stagingAllocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;
+	if (vmaCreateBuffer(vmaAllocator, &stagingBufferInfo, &stagingAllocInfo,
+						&stagingBuffer, &stagingAllocation, nullptr) != VK_SUCCESS) {
+		texture->cleanup(device, vmaAllocator);
+		throw std::runtime_error("Failed to create staging buffer for texture data");
+	}
+
+	void *mapped = nullptr;
+	vmaMapMemory(vmaAllocator, stagingAllocation, &mapped);
+	memcpy(mapped, rgbaPixels.data(), rgbaPixels.size());
+	vmaUnmapMemory(vmaAllocator, stagingAllocation);
+
+	VkCommandBuffer cmd = beginSingleTimeCommands();
+	transitionImage(cmd, texture->image, VK_IMAGE_LAYOUT_UNDEFINED,
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+					VK_PIPELINE_STAGE_2_TRANSFER_BIT, 0,
+					VK_ACCESS_2_TRANSFER_WRITE_BIT);
+
+	VkBufferImageCopy region{};
+	region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	region.imageSubresource.mipLevel = 0;
+	region.imageSubresource.baseArrayLayer = 0;
+	region.imageSubresource.layerCount = 1;
+	region.imageExtent = {width, height, 1};
+	vkCmdCopyBufferToImage(cmd, stagingBuffer, texture->image,
+						   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+	transitionImage(cmd, texture->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+					VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+					VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+					VK_ACCESS_2_TRANSFER_WRITE_BIT,
+					VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+	endSingleTimeCommands(cmd);
+
+	vmaDestroyBuffer(vmaAllocator, stagingBuffer, stagingAllocation);
+	texture->createViewAndSampler(device);
+	return texture;
 }
 
 void Renderer::createDefaultTextures() {

@@ -69,6 +69,9 @@ public:
     std::unique_ptr<Material> createMaterial(const char* texturePath,
                                              const char* vertexShaderPath,
                                              const char* fragmentShaderPath);
+    std::unique_ptr<Material> createMaterialFromTexture(
+        std::shared_ptr<Texture> texture, const char *vertexShaderPath,
+        const char *fragmentShaderPath);
     std::unique_ptr<Mesh> createMesh(const Mesh::MeshData& data);
     std::unique_ptr<Mesh> createAxisMesh(float axisLength = 2.0f,
                                          float axisWidth = 0.05f);
@@ -88,6 +91,9 @@ public:
 
     // Texture management
     std::shared_ptr<Texture> createTexture(const char* imagePath);
+    std::shared_ptr<Texture>
+    createTextureFromData(uint32_t width, uint32_t height, uint32_t channels,
+                          const std::vector<std::uint8_t> &pixels);
     std::shared_ptr<Texture> getDefaultWhiteTexture() { return defaultWhiteTexture; }
     VkSampler getDefaultSampler() const { return defaultSampler; }
     

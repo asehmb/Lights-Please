@@ -14,6 +14,8 @@ add_executable(LightsPlease main.cpp
     engine/math/vector.cpp
     engine/platform.cpp
     engine/job_system.cpp
+    engine/asset/asset_pipeline.cpp
+    engine/asset/runtime_asset_registry.cpp
     engine/memory/pool_allocator.cpp
     engine/memory/linear_allocator.cpp
     engine/renderer/renderer.cpp
@@ -25,6 +27,7 @@ add_executable(LightsPlease main.cpp
     engine/renderer/descriptor_layout.cpp
     engine/renderer/vma_implementation.cpp
     engine/camera.cpp
+    engine/demo_scene.cpp
     engine/renderer/ubo.cpp
     engine/loadModel.cpp
     engine/renderer/texture.cpp
@@ -120,3 +123,10 @@ add_executable(load_model_tests
     engine/loadModel.cpp
 )
 add_test(NAME load_model_tests COMMAND load_model_tests)
+
+add_executable(asset_pipeline_tests
+    tests/asset_pipeline_test.cpp
+    engine/asset/asset_pipeline.cpp
+    engine/job_system.cpp
+)
+add_test(NAME asset_pipeline_tests COMMAND asset_pipeline_tests)

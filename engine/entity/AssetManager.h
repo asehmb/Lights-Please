@@ -6,7 +6,7 @@
 #include <string>
 #include <unordered_map>
 
-template <typename T> class AssetManager {
+template <typename T, typename Key = std::string> class AssetManager {
 public:
   AssetManager() = default;
 
@@ -18,15 +18,15 @@ public:
   AssetManager &operator=(const AssetManager &) = delete;
 
   // 1. ADD: Inserts an already constructed asset into the map
-  void Add(const std::string &id, const T &asset) {
+  void Add(const Key &id, const T &asset) {
     if (!Has(id)) {
       assets[id] = asset;
     } else {
-      std::cout << "Warning: Asset '" << id << "' already exists!\n";
+      std::cout << "Warning: Asset already exists\n";
     }
   }
 
-  T *Get(const std::string &id) {
+  T *Get(const Key &id) {
     auto it = assets.find(id);
     if (it != assets.end()) {
       // Safe to return a pointer; unordered_map doesn't invalidate
@@ -34,20 +34,30 @@ public:
       return &(it->second);
     }
 
-    std::cerr << "Error: Asset '" << id << "' not found!\n";
+    std::cerr << "Error: Asset not found\n";
     return nullptr;
   }
 
-  bool Has(const std::string &id) const {
+  const T *Get(const Key &id) const {
+    auto it = assets.find(id);
+    if (it != assets.end()) {
+      return &(it->second);
+    }
+
+    std::cerr << "Error: Asset not found\n";
+    return nullptr;
+  }
+
+  bool Has(const Key &id) const {
     return assets.find(id) != assets.end();
   }
 
-  void Remove(const std::string &id) { assets.erase(id); }
+  void Remove(const Key &id) { assets.erase(id); }
 
   void Clear() { assets.clear(); }
 
 private:
-  std::unordered_map<std::string, T> assets;
+  std::unordered_map<Key, T> assets;
 };
 
 // data structure to hold all assets, such as textures, models, sounds, etc.

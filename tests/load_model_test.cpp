@@ -1,4 +1,3 @@
-#define TINYOBJLOADER_IMPLEMENTATION
 #include "../engine/loadModel.h"
 #include <cassert>
 

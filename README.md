@@ -8,6 +8,8 @@ This repository is actively under development. The current app:
 
 - initializes the engine and renderer
 - loads OBJ assets (example: `models/Minion.obj`)
+- includes a UUID-backed asset pipeline with mesh/texture importers, binary cache
+  formats, async loading, dependency tracking, and timestamp-based hot reload
 - creates Vulkan pipelines/materials/textures
 - renders sample geometry (including axis meshes)
 - exercises an ECS-style entity/component path in `main.cpp`
