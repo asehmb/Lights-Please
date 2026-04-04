@@ -47,6 +47,15 @@ Run from the repository root so relative asset paths resolve:
 ./build/"Lights Please"
 ```
 
+## Runtime controls
+
+- `P`: pause/resume simulation
+- `O`: single-step one physics tick while paused
+- `1` / `2` / `3`: set simulation timescale to `0.1x` / `1.0x` / `2.0x`
+- `C`: toggle collider wireframe debug hook
+- `B`: toggle AABB debug hook
+- `N`: toggle contact point debug hook (placeholder until contact generation exists)
+
 ## Project layout
 
 - `engine/` core engine systems (platform, renderer, ECS, memory, jobs)

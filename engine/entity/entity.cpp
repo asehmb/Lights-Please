@@ -3,7 +3,12 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
+#include <new>
 
+namespace {
+constexpr Entity_id kGenerationIncrement = BITMASK_INDEX + 1;
+}
 
 uint32_t alignUp(uint32_t offset, size_t alignment) {
     return (offset + (alignment - 1)) & ~(alignment - 1);
@@ -23,12 +28,15 @@ EntityManager::EntityManager() {
     ComponentRegistry::registerType<AI>();
     ComponentRegistry::registerType<Gravity>();
     ComponentRegistry::registerType<Transformable>();
+    ComponentRegistry::registerType<RigidBody>();
+    ComponentRegistry::registerType<Collider>();
+    ComponentRegistry::registerType<PhysicsMaterial>();
 }
 
 EntityManager::~EntityManager() {
     for (auto& arch : existingArchetypes) {
         for (auto& chunk : arch->chunks) {
-            chunkAllocator.deallocate(chunk->data);
+            releaseChunkData(chunk->data);
             delete chunk;
         }
     }
@@ -49,6 +57,8 @@ Entity_id EntityManager::createEntity(ComponentMask components) {
     }
 
     std::uint32_t row = chunk->row; // current row in chunk
+    zeroInitializeEntityComponents(archetype, chunk, row);
+    applyComponentDefaults(archetype, chunk, row, components);
 
     // Store entity location
     EntityData entityData;
@@ -60,18 +70,19 @@ Entity_id EntityManager::createEntity(ComponentMask components) {
 
     Entity_id finalId;
     if (freeEntityIds.empty()) {
-        entityData.row = row;
-        entityRecords.push_back(entityData);
-        entityCount++;
         finalId = nextEntityId++;
+        entityData.id = finalId;
+        entityRecords.push_back(entityData);
     } else {
-        uint32_t reusedId = freeEntityIds.back();
+        Entity_id reusedId = freeEntityIds.back();
         freeEntityIds.pop_back();
-        entityRecords[(reusedId & BITMASK_INDEX)] = entityData;
         finalId = reusedId & BITMASK_INDEX | // get index
-            (((reusedId & BITMASK_GENERATION) + 1) // increment generation
+            (((reusedId & BITMASK_GENERATION) + kGenerationIncrement) // increment generation
              & BITMASK_GENERATION); // wrap around generation
+        entityData.id = finalId;
+        entityRecords[(reusedId & BITMASK_INDEX)] = entityData;
     }
+    entityCount++;
 
     // record id in chunk
     Entity_id* ids = (Entity_id*)chunk->data;
@@ -80,6 +91,48 @@ Entity_id EntityManager::createEntity(ComponentMask components) {
 
     return finalId;
 
+}
+
+void EntityManager::zeroInitializeEntityComponents(Archetype* archetype, Chunk* chunk,
+                                                   uint32_t row) {
+    if (!archetype || !chunk) {
+        return;
+    }
+
+    std::byte* chunkData = static_cast<std::byte*>(chunk->data);
+    for (int i = 0; i < 16; ++i) {
+        if ((archetype->componentMask & (1u << i)) == 0u) {
+            continue;
+        }
+
+        const size_t size = archetype->sizes[i];
+        if (size == 0) {
+            continue;
+        }
+
+        const size_t offset = archetype->offsets[i];
+        std::byte* dst = chunkData + offset + (row * size);
+        std::memset(dst, 0, size);
+    }
+}
+
+void EntityManager::applyComponentDefaults(Archetype* archetype, Chunk* chunk,
+                                           uint32_t row,
+                                           ComponentMask components) {
+    if (!archetype || !chunk) {
+        return;
+    }
+
+    if ((components & Components::Collider) != 0u) {
+        auto* collider = reinterpret_cast<Collider*>(
+            static_cast<std::byte*>(chunk->data) +
+            archetype->offsets[componentMaskToIndex(Components::Collider)] +
+            (row * archetype->sizes[componentMaskToIndex(Components::Collider)]));
+        collider->collisionLayer = CollisionLayers::Default;
+        collider->collisionMask = CollisionLayers::All;
+        collider->behaviorFlags = ColliderBehavior::Solid;
+        collider->shape = ColliderShape::Box;
+    }
 }
 
 /*
@@ -144,6 +197,35 @@ Archetype* EntityManager::getOrCreateArchetype(ComponentMask mask) {
  * Returns a pointer to a chunk with available space for the given archetype.
  * If no such chunk exists, a new one is allocated.
  */
+void *EntityManager::allocateChunkData() {
+    void *chunkData = chunkAllocator.allocate();
+    if (chunkData) {
+        return chunkData;
+    }
+
+    std::byte *overflowBlock = new (std::nothrow) std::byte[CHUNK_SIZE];
+    if (!overflowBlock) {
+        return nullptr;
+    }
+    overflowChunkBlocks.insert(overflowBlock);
+    return overflowBlock;
+}
+
+void EntityManager::releaseChunkData(void *chunkData) {
+    if (!chunkData) {
+        return;
+    }
+
+    auto overflowIt = overflowChunkBlocks.find(static_cast<std::byte *>(chunkData));
+    if (overflowIt != overflowChunkBlocks.end()) {
+        delete[] *overflowIt;
+        overflowChunkBlocks.erase(overflowIt);
+        return;
+    }
+
+    chunkAllocator.deallocate(chunkData);
+}
+
 Chunk* EntityManager::getOrCreateChunk(Archetype* archetype) {
     // 1. Check existing last chunk
     if (!archetype->chunks.empty()) {
@@ -154,7 +236,7 @@ Chunk* EntityManager::getOrCreateChunk(Archetype* archetype) {
     }
 
     // 2. Allocate
-    void* chunkData = chunkAllocator.allocate();
+    void* chunkData = allocateChunkData();
     if (!chunkData) return nullptr;
 
     Chunk* newChunk = new Chunk(); 
@@ -173,6 +255,9 @@ void EntityManager::moveEntity(Chunk* srcChunk, uint32_t srcRow, Chunk* dstChunk
     Archetype* srcArch = srcChunk->archetype;
     Archetype* dstArch = dstChunk->archetype;
     uint32_t dstRow = dstChunk->row;
+
+    zeroInitializeEntityComponents(dstArch, dstChunk, dstRow);
+    applyComponentDefaults(dstArch, dstChunk, dstRow, dstArch->componentMask);
 
     // 1. Copy Components
     for (int i = 0; i < 16; ++i) {
@@ -214,7 +299,7 @@ void EntityManager::tryMergeAndFreeChunk(Chunk* chunk) {
             *it = arch->chunks.back();
             arch->chunks.pop_back();
         }
-        chunkAllocator.deallocate(chunk->data);
+        releaseChunkData(chunk->data);
         delete chunk;
         return;
     }
@@ -272,19 +357,38 @@ void EntityManager::destroyEntity(Entity_id entity) {
     if (index >= entityRecords.size()) return;
 
     EntityData& data = entityRecords[index];
+    if (data.id != entity || !data.chunk || !data.archetype) return;
+
+    Transform_id transformHandle = NULL_ENTITY;
+    if ((data.archetype->componentMask & Components::Transformable) != 0) {
+        auto* transformable = static_cast<Transformable*>(
+            getComponentData(entity, Components::Transformable));
+        if (transformable) {
+            transformHandle = transformable->handle;
+        }
+    }
+    if (entityDestroyedCallback) {
+        entityDestroyedCallback(entity, transformHandle);
+    }
+
     Chunk* chunk = data.chunk;
+    const uint32_t row = data.row;
 
-    freeEntityIds.push_back(index);
+    freeEntityIds.push_back(entity);
 
-    Entity_id movedEntity = swapAndPopChunkRow(data.row, chunk);
+    Entity_id movedEntity = swapAndPopChunkRow(row, chunk);
 
     if (movedEntity != NULL_ENTITY) {
-        entityRecords[movedEntity & BITMASK_INDEX].row = data.row;
+        entityRecords[movedEntity & BITMASK_INDEX].row = row;
     }
 
     tryMergeAndFreeChunk(chunk);
 
-    entityCount--;
+    data = {};
+    data.id = NULL_ENTITY;
+    if (entityCount > 0) {
+        entityCount--;
+    }
 }
 /*
  * Returns pointer to component data for given entity and component type.
@@ -295,6 +399,9 @@ void* EntityManager::getComponentData(Entity_id entityId, ComponentMask componen
     if (index >= entityRecords.size()) return nullptr;
 
     EntityData& data = entityRecords[index];
+    if (data.id != entityId || !data.chunk || !data.archetype) {
+        return nullptr;
+    }
     Archetype* arch = data.archetype;
 
     if ((arch->componentMask & component) == 0) {
@@ -317,6 +424,7 @@ void EntityManager::addComponent(Entity_id entityId, ComponentMask component) {
     if (index >= entityRecords.size()) return;
 
     EntityData& data = entityRecords[index];
+    if (data.id != entityId || !data.chunk || !data.archetype) return;
     ComponentMask newMask = data.archetype->componentMask | component;
 
     if (newMask == data.archetype->componentMask) {
@@ -349,6 +457,7 @@ void EntityManager::removeComponent(Entity_id entityId, ComponentMask component)
     if (index >= entityRecords.size()) return;
 
     EntityData& data = entityRecords[index];
+    if (data.id != entityId || !data.chunk || !data.archetype) return;
     ComponentMask newMask = data.archetype->componentMask & ~component;
 
     if (newMask == data.archetype->componentMask) {
@@ -377,7 +486,7 @@ std::vector<Entity_id> EntityManager::getAllEntitiesWithComponents(ComponentMask
     std::vector<Entity_id> result;
 
     for (const auto& entityData : entityRecords) {
-        if (entityData.archetype && 
+        if (entityData.id != NULL_ENTITY && entityData.chunk && entityData.archetype &&
             (entityData.archetype->componentMask & components) == components) {
             Entity_id* ids = (Entity_id*)entityData.chunk->data;
             result.push_back(ids[entityData.row]);

@@ -14,10 +14,14 @@ layout(binding = 0) uniform GlobalUBO {
     mat4 proj;
 } ubo;
 
+layout(push_constant) uniform PushConstants {
+    mat4 model;
+} pushConstants;
+
 void main() {
     // Vulkan automatically pulls the correct data into these variables 
     // for the current vertex being processed.
-    gl_Position = ubo.proj * ubo.view * ubo.model * vec4(inPosition, 1.0);
+    gl_Position = ubo.proj * ubo.view * pushConstants.model * vec4(inPosition, 1.0);
     fragColor = inColor;
     fragTexCoord = inUV;
 }

@@ -6,7 +6,8 @@
 struct SDL_Window;
 
 enum class Key {
-    W, A, S, D, Space, Escape, Shift, // Add more as needed
+    W, A, S, D, Space, Escape, Shift,
+    P, O, Num1, Num2, Num3, C, B, N,
     COUNT
 };
 

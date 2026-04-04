@@ -32,6 +32,7 @@ add_executable(LightsPlease main.cpp
     engine/loadModel.cpp
     engine/renderer/texture.cpp
     engine/entity/entity.cpp
+    engine/entity/sceneGraph.cpp
     engine/entity/renderSystem.cpp
     engine/entity/systems.cpp
 )
@@ -61,7 +62,9 @@ enable_testing()
 add_executable(render_system_tests
     tests/render_system_test.cpp
     engine/entity/entity.cpp
+    engine/entity/sceneGraph.cpp
     engine/entity/renderSystem.cpp
+    engine/job_system.cpp
     engine/memory/pool_allocator.cpp
     engine/math/vector.cpp
 )
@@ -101,12 +104,23 @@ add_test(NAME job_system_tests COMMAND job_system_tests)
 add_executable(gravity_system_tests
     tests/gravity_system_test.cpp
     engine/entity/entity.cpp
+    engine/entity/sceneGraph.cpp
     engine/entity/systems.cpp
     engine/job_system.cpp
     engine/memory/pool_allocator.cpp
     engine/math/vector.cpp
 )
 add_test(NAME gravity_system_tests COMMAND gravity_system_tests)
+
+add_executable(scene_graph_tests
+    tests/scene_graph_test.cpp
+    engine/entity/entity.cpp
+    engine/entity/sceneGraph.cpp
+    engine/job_system.cpp
+    engine/memory/pool_allocator.cpp
+    engine/math/vector.cpp
+)
+add_test(NAME scene_graph_tests COMMAND scene_graph_tests)
 
 add_executable(camera_tests
     tests/camera_test.cpp

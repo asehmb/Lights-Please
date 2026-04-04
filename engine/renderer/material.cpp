@@ -35,8 +35,13 @@ void Material::createPipelineLayout(DescriptorLayouts& descriptorLayouts) {
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(layouts.size());
     pipelineLayoutInfo.pSetLayouts = layouts.data();
-    pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
-    pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
+
+    VkPushConstantRange modelPushConstant{};
+    modelPushConstant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    modelPushConstant.offset = 0;
+    modelPushConstant.size = sizeof(mathplease::Matrix4);
+    pipelineLayoutInfo.pushConstantRangeCount = 1;
+    pipelineLayoutInfo.pPushConstantRanges = &modelPushConstant;
 
     if (vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &pipelineLayout) != VK_SUCCESS) {
         throw std::runtime_error("Failed to create pipeline layout!");

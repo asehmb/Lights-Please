@@ -30,13 +30,13 @@ void init(int width, int height) {
     window = ::SDL_CreateWindow(
         "Lights Please",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-        1280, 720,
+        width, height,
         SDL_WINDOW_VULKAN | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE
     );
 
     perf_freq = ::SDL_GetPerformanceFrequency();
     last_time = ::SDL_GetPerformanceCounter();
-    if (!SDL_SetRelativeMouseMode(SDL_TRUE)) {
+    if (SDL_SetRelativeMouseMode(SDL_TRUE) < 0) {
         SDL_Log("Failed to set relative mouse mode: %s", SDL_GetError());
     }
     SDL_SetWindowGrab(window, SDL_FALSE);
@@ -55,6 +55,14 @@ static Key scancode_to_key(SDL_Scancode code) {
         case SDL_SCANCODE_SPACE:  return Key::Space;
         case SDL_SCANCODE_ESCAPE: return Key::Escape;
         case SDL_SCANCODE_LSHIFT: return Key::Shift;
+        case SDL_SCANCODE_P: return Key::P;
+        case SDL_SCANCODE_O: return Key::O;
+        case SDL_SCANCODE_1: return Key::Num1;
+        case SDL_SCANCODE_2: return Key::Num2;
+        case SDL_SCANCODE_3: return Key::Num3;
+        case SDL_SCANCODE_C: return Key::C;
+        case SDL_SCANCODE_B: return Key::B;
+        case SDL_SCANCODE_N: return Key::N;
         default: return Key::COUNT;
     }
 }
@@ -77,8 +85,8 @@ void poll_events() {
             mouse_pos.x = (float)event.motion.x;
             mouse_pos.y = (float)event.motion.y;
 
-            relativeMousePos.x = (float)event.motion.xrel;
-            relativeMousePos.y = (float)event.motion.yrel;
+            relativeMousePos.x += (float)event.motion.xrel;
+            relativeMousePos.y += (float)event.motion.yrel;
         }
 
         if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) {

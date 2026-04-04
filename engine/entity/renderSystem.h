@@ -1,15 +1,20 @@
 #pragma once
 
 #include "../renderer/renderer.h"
-#include "AssetManager.h"
 #include "entity.h"
+#include "sceneGraph.h"
 #include <cstdint>
-#include <string>
 #include <unordered_map>
 #include <vector>
 
 class RenderSystem {
 public:
+  struct PhysicsDebugVisualizationSettings {
+    bool showColliderWireframes = false;
+    bool showAABBs = false;
+    bool showContactPoints = false;
+  };
+
   RenderSystem() = default;
   RenderSystem(const RenderSystem &) = delete;
   RenderSystem &operator=(const RenderSystem &) = delete;
@@ -18,20 +23,42 @@ public:
   uint32_t registerMaterial(Material *material);
   Mesh *getMesh(uint32_t meshId) const;
   Material *getMaterial(uint32_t materialId) const;
-  Entity_id createRenderableEntity(EntityManager &em, Mesh *mesh,
+  void capturePreviousState(EntityManager &em, SceneGraph &sceneGraph);
+  Entity_id createRenderableEntity(EntityManager &em, SceneGraph &sceneGraph,
+                                   Mesh *mesh,
                                    Material *material,
                                    const mathplease::Vector4 &position);
 
-  std::vector<Renderer::Drawable> collectDrawables(EntityManager &em) const;
-  void update(EntityManager &em, Renderer &renderer);
+  std::vector<Renderer::Drawable> collectDrawables(EntityManager &em,
+                                                   SceneGraph &sceneGraph,
+                                                   float alpha = 1.0f) const;
+  void update(EntityManager &em, SceneGraph &sceneGraph, Renderer &renderer,
+              float alpha = 1.0f);
+  void setPhysicsDebugVisualizationSettings(
+      const PhysicsDebugVisualizationSettings &settings);
+  const PhysicsDebugVisualizationSettings &
+  getPhysicsDebugVisualizationSettings() const {
+    return physicsDebugVisualizationSettings;
+  }
+  void toggleColliderWireframes();
+  void toggleAABBs();
+  void toggleContactPoints();
 
 private:
-  static std::string toAssetKey(uint32_t id);
+  static bool drawableLess(const Renderer::Drawable &a,
+                           const Renderer::Drawable &b);
+  void collectDrawablesInto(EntityManager &em, SceneGraph &sceneGraph, float alpha,
+                            std::vector<Renderer::Drawable> &out) const;
+  Renderer::PhysicsDebugOverlayState
+  collectPhysicsDebugOverlayState(EntityManager &em) const;
 
-  mutable AssetManager<Mesh *> meshManager;
-  mutable AssetManager<Material *> materialManager;
+  std::vector<Mesh *> meshesById;
+  std::vector<Material *> materialsById;
   std::unordered_map<const Mesh *, uint32_t> meshIdsByPtr;
   std::unordered_map<const Material *, uint32_t> materialIdsByPtr;
+  std::unordered_map<Entity_id, mathplease::Matrix4> previousWorldMatricesByEntity;
+  std::vector<Renderer::Drawable> frameDrawablesScratch;
+  PhysicsDebugVisualizationSettings physicsDebugVisualizationSettings;
   uint32_t nextMeshId = 1;
   uint32_t nextMaterialId = 1;
 };
