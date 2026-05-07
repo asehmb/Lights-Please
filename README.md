@@ -1,3 +1,6 @@
+<img width="2784" height="1728" alt="image" src="https://github.com/user-attachments/assets/d7853a98-5f6b-4cb6-b07d-9a152bc810b0" />
+
+
 # Lights Please (WIP)
 
 `Lights Please` is a work-in-progress C++20 game/graphics engine project using SDL2 + Vulkan.
