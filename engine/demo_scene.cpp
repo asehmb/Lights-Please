@@ -250,7 +250,7 @@ void DemoScene::renderAxisWithTriangle(Engine &engine) {
 
   Position *position = static_cast<Position *>(
       entityManager->getComponentData(entityId, Components::Position));
-  position->value = mathplease::Vector4(0.0f, 0.0f, 0.0f, 1.0f);
+  position->value = mathplease::Vector4(-1.0f, 1.0f, 0.0f, 1.0f);
 
   Transform_id transformId = sceneGraph->createTransform(entityId);
   if (transformId == NULL_ENTITY) {
@@ -268,4 +268,125 @@ void DemoScene::renderAxisWithTriangle(Engine &engine) {
                                mathplease::Vector4(0.0f, 0.0f, 0.0f, 1.0f));
 
   LOG_INFO("DEMO", "Rendered demo triangle with axis-aligned vertex colors");
+
+  Mesh::MeshData axisData;
+
+  const float axisLength = 2.0f;
+  const float axisThickness = 0.025f;
+
+  // Helper for adding a rectangular prism/cuboid
+  auto addBox = [&](mathplease::Vector3 min, mathplease::Vector3 max,
+                    mathplease::Vector3 color) {
+    uint32_t start = static_cast<uint32_t>(axisData.vertices.size());
+
+    mathplease::Vector3 normal(0.0f, 0.0f, 1.0f);
+
+    axisData.vertices.push_back(
+        {{min.x, min.y, min.z}, color, normal, {0.0f, 0.0f}});
+    axisData.vertices.push_back(
+        {{max.x, min.y, min.z}, color, normal, {1.0f, 0.0f}});
+    axisData.vertices.push_back(
+        {{max.x, max.y, min.z}, color, normal, {1.0f, 1.0f}});
+    axisData.vertices.push_back(
+        {{min.x, max.y, min.z}, color, normal, {0.0f, 1.0f}});
+
+    axisData.vertices.push_back(
+        {{min.x, min.y, max.z}, color, normal, {0.0f, 0.0f}});
+    axisData.vertices.push_back(
+        {{max.x, min.y, max.z}, color, normal, {1.0f, 0.0f}});
+    axisData.vertices.push_back(
+        {{max.x, max.y, max.z}, color, normal, {1.0f, 1.0f}});
+    axisData.vertices.push_back(
+        {{min.x, max.y, max.z}, color, normal, {0.0f, 1.0f}});
+
+    std::vector<uint32_t> inds = {// back face
+                                  0, 1, 2, 2, 3, 0,
+
+                                  // front face
+                                  4, 6, 5, 6, 4, 7,
+
+                                  // left face
+                                  0, 3, 7, 7, 4, 0,
+
+                                  // right face
+                                  1, 5, 6, 6, 2, 1,
+
+                                  // top face
+                                  3, 2, 6, 6, 7, 3,
+
+                                  // bottom face
+                                  0, 4, 5, 5, 1, 0};
+
+    for (uint32_t i : inds) {
+      axisData.indices.push_back(start + i);
+    }
+  };
+
+  // X axis: red
+  addBox(mathplease::Vector3(0.0f, -axisThickness, -axisThickness),
+         mathplease::Vector3(-axisLength, axisThickness, axisThickness),
+         mathplease::Vector3(1.0f, 0.0f, 0.0f));
+
+  // Y axis: green, up
+  addBox(mathplease::Vector3(-axisThickness, 0.0f, -axisThickness),
+         mathplease::Vector3(axisThickness, axisLength, axisThickness),
+         mathplease::Vector3(0.0f, 1.0f, 0.0f));
+
+  // Z axis: blue
+  addBox(mathplease::Vector3(-axisThickness, -axisThickness, 0.0f),
+         mathplease::Vector3(axisThickness, axisThickness, -axisLength),
+         mathplease::Vector3(0.0f, 0.0f, 1.0f));
+
+  assetRegistry->addMesh("axis.mesh", renderer->createMesh(axisData));
+
+  meshId =
+      renderSystem->registerMesh(assetRegistry->getMesh("axis.mesh").get());
+
+  materialAsset = std::shared_ptr<Material>(renderer->createMaterial(
+      "textures/white.jpg", "shaders/triangle.vert.spv",
+      "shaders/triangle.frag.spv"));
+
+  assetRegistry->addMaterial("axis.material", materialAsset);
+
+  materialId = renderSystem->registerMaterial(
+      assetRegistry->getMaterial("axis.material").get());
+
+  if (meshId == 0) {
+    LOG_ERR("DEMO", "Failed to register axis mesh");
+  }
+
+  if (materialId == 0) {
+    LOG_ERR("DEMO", "Failed to register axis material");
+  }
+
+  entityId = entityManager->createEntity(Components::Position |
+                                         Components::Renderable |
+                                         Components::Transformable);
+
+  renderable = static_cast<Renderable *>(
+      entityManager->getComponentData(entityId, Components::Renderable));
+
+  renderable->meshId = meshId;
+  renderable->materialId = materialId;
+
+  position = static_cast<Position *>(
+      entityManager->getComponentData(entityId, Components::Position));
+
+  position->value = mathplease::Vector4(0.0f, 0.0f, 0.0f, 1.0f);
+
+  transformId = sceneGraph->createTransform(entityId);
+
+  if (transformId == NULL_ENTITY) {
+    throw std::runtime_error("Failed to create transform for demo axis entity");
+  }
+
+  transformable = static_cast<Transformable *>(
+      entityManager->getComponentData(entityId, Components::Transformable));
+
+  transformable->handle = transformId;
+
+  sceneGraph->setLocalPosition(transformId, position->value);
+
+  sceneGraph->setLocalRotation(transformId,
+                               mathplease::Vector4(0.0f, 0.0f, 0.0f, 1.0f));
 }

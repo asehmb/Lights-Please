@@ -141,8 +141,7 @@ float delta_time() {
     float ms = (time_accum / frame_count) * 1000.0f;
 
     char title[256];
-    snprintf(title, sizeof(title),
-             "Lights Please | FPS: %.1f | Frame Time: %.2f ms", fps, ms);
+    snprintf(title, sizeof(title), "Lights Please | Frame Time: %.2f ms", ms);
     SDL_SetWindowTitle(window, title);
 
     frame_count = 0;
