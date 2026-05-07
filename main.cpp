@@ -6,7 +6,7 @@ int main() {
   engine.initialize();
 
   DemoScene scene;
-  scene.load(engine);
+  scene.renderAxisWithTriangle(engine);
 
   engine.run();
   return 0;

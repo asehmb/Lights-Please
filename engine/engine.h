@@ -1,16 +1,51 @@
 #pragma once
 
-#include "job_system.h"
-#include "renderer/renderer.h"
 #include "asset/runtime_asset_registry.h"
 #include "camera.h"
 #include "entity/entity.h"
 #include "entity/renderSystem.h"
 #include "entity/sceneGraph.h"
 #include "entity/systems.h"
+#include "job_system.h"
 #include "platform.h"
+#include "renderer/renderer.h"
 #include <functional>
 #include <memory>
+
+struct InputState {
+  bool currentKeys[static_cast<int>(Key::COUNT)] = {};
+  bool previousKeys[static_cast<int>(Key::COUNT)] = {};
+
+  mathplease::Vector2 mouseDelta = mathplease::Vector2(0.0f, 0.0f);
+
+  void beginFrame() {
+    mouseDelta = mathplease::Vector2(0.0f, 0.0f);
+
+    for (int i = 0; i < static_cast<int>(Key::COUNT); ++i) {
+      previousKeys[i] = currentKeys[i];
+    }
+  }
+
+  void updateFromPlatform() {
+    for (int i = 0; i < static_cast<int>(Key::COUNT); ++i) {
+      currentKeys[i] = platform::key_down(static_cast<Key>(i));
+    }
+
+    mouseDelta = mouseDelta + platform::get_relative_mouse_position();
+  }
+
+  bool down(Key key) const { return currentKeys[static_cast<int>(key)]; }
+
+  bool pressed(Key key) const {
+    int idx = static_cast<int>(key);
+    return currentKeys[idx] && !previousKeys[idx];
+  }
+
+  bool released(Key key) const {
+    int idx = static_cast<int>(key);
+    return !currentKeys[idx] && previousKeys[idx];
+  }
+};
 
 class Engine {
 public:
@@ -26,6 +61,7 @@ public:
   SceneGraph *getSceneGraph() { return sceneGraph.get(); }
   RenderSystem *getRenderSystem() { return &renderSystem; }
   RuntimeAssetRegistry *getAssetRegistry() { return &assetRegistry; }
+  Camera *getCamera() const { return camera.get(); }
   JobSystem *getJobSystem() const { return job_system.get(); }
   void setSimulationPaused(bool paused);
   void toggleSimulationPaused();
@@ -36,6 +72,7 @@ public:
   void setFrameUpdateHook(FrameUpdateHook hook) {
     frameUpdateHook = std::move(hook);
   }
+  InputState inputState;
 
 private:
   struct CameraState {

@@ -39,12 +39,13 @@ public:
   mathplease::Matrix4 getProjectionMatrix(float nearPlane = 0.1f,
                                           float farPlane = 1000.0f);
 
+  /* will be removed */
   void update(float deltaTime);
 
   void handleEvent(const SDL_Event &event);
 
   // Camera utilities
-  mathplease::Vector3 getForward() const;
-  mathplease::Vector3 getRight() const;
-  mathplease::Vector3 getUp() const;
+  mathplease::Vector3 getForward();
+  mathplease::Vector3 getRight();
+  mathplease::Vector3 getUp();
 };

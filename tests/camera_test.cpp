@@ -19,11 +19,22 @@ int main() {
   assert(approx(forward.x, 0.0f));
   assert(approx(forward.y, 0.0f));
   assert(approx(forward.z, 1.0f));
+  auto right = camera.getRight();
+  assert(approx(right.x, 1.0f));
+  assert(approx(right.y, 0.0f));
+  assert(approx(right.z, 0.0f));
 
   camera.input.forward = true;
   camera.update(0.5f);
   camera.input.forward = false;
   assert(approx(camera.position.x, 4.0f));
+  assert(approx(camera.position.y, 4.0f));
+  assert(approx(camera.position.z, 5.0f));
+
+  camera.input.right = true;
+  camera.update(0.5f);
+  camera.input.right = false;
+  assert(approx(camera.position.x, 5.0f));
   assert(approx(camera.position.y, 4.0f));
   assert(approx(camera.position.z, 5.0f));
 

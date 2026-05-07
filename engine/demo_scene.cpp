@@ -1,9 +1,11 @@
 #include "demo_scene.h"
 
+#include "engine.h"
 #include "loadModel.h"
 #include "logger.h"
 #include <algorithm>
 #include <cstdint>
+#include <memory>
 #include <stdexcept>
 
 namespace {
@@ -184,4 +186,86 @@ void DemoScene::load(Engine &engine) {
            "Loaded demo stress scene with {} entities ({} visible render "
            "transforms)",
            kStressEntityCount, visibleEntityCount);
+}
+
+void DemoScene::renderAxisWithTriangle(Engine &engine) {
+  Mesh::MeshData triangleData;
+  const float halfSide = 0.5f;
+  const float height = 0.8660254f; // sqrt(3) / 2
+
+  triangleData.vertices = {
+      {{0.0f, height * 0.5f, 0.0f},
+       {1.0f, 0.0f, 0.0f},
+       {0.0f, 0.0f, 1.0f},
+       {0.5f, 0.0f}}, // top
+
+      {{halfSide, -height * 0.5f, 0.0f},
+       {0.0f, 1.0f, 0.0f},
+       {0.0f, 0.0f, 1.0f},
+       {1.0f, 1.0f}}, // bottom-right
+
+      {{-halfSide, -height * 0.5f, 0.0f},
+       {0.0f, 0.0f, 1.0f},
+       {0.0f, 0.0f, 1.0f},
+       {0.0f, 1.0f}} // bottom-left
+  };
+
+  triangleData.indices = {0, 1, 2};
+  Renderer *renderer = engine.getRenderer();
+  RenderSystem *renderSystem = engine.getRenderSystem();
+  EntityManager *entityManager = engine.getEntityManager();
+  SceneGraph *sceneGraph = engine.getSceneGraph();
+  RuntimeAssetRegistry *assetRegistry = engine.getAssetRegistry();
+  Camera *camera = engine.getCamera();
+
+  assetRegistry->addMesh("triangle.mesh", renderer->createMesh(triangleData));
+
+  uint32_t meshId =
+      renderSystem->registerMesh(assetRegistry->getMesh("triangle.mesh").get());
+
+  auto materialAsset = std::shared_ptr<Material>(renderer->createMaterial(
+      "textures/white.jpg", "shaders/triangle.vert.spv",
+      "shaders/triangle.frag.spv"));
+
+  assetRegistry->addMaterial("triangle.material", materialAsset);
+
+  uint32_t materialId = renderSystem->registerMaterial(
+      assetRegistry->getMaterial("triangle.material").get());
+
+  if (meshId == 0) {
+    LOG_ERR("DEMO", "Failed to register triangle mesh");
+  }
+  if (materialId == 0) {
+    LOG_ERR("DEMO", "Failed to register triangle material");
+  }
+
+  Entity_id entityId = entityManager->createEntity(Components::Position |
+                                                   Components::Renderable |
+                                                   Components::Transformable);
+
+  Renderable *renderable = static_cast<Renderable *>(
+      entityManager->getComponentData(entityId, Components::Renderable));
+  renderable->meshId = meshId;
+  renderable->materialId = materialId;
+
+  Position *position = static_cast<Position *>(
+      entityManager->getComponentData(entityId, Components::Position));
+  position->value = mathplease::Vector4(0.0f, 0.0f, 0.0f, 1.0f);
+
+  Transform_id transformId = sceneGraph->createTransform(entityId);
+  if (transformId == NULL_ENTITY) {
+    throw std::runtime_error(
+        "Failed to create transform for demo triangle entity");
+  }
+
+  Transformable *transformable = static_cast<Transformable *>(
+      entityManager->getComponentData(entityId, Components::Transformable));
+  transformable->handle = transformId;
+
+  sceneGraph->setLocalPosition(transformId, position->value);
+
+  sceneGraph->setLocalRotation(transformId,
+                               mathplease::Vector4(0.0f, 0.0f, 0.0f, 1.0f));
+
+  LOG_INFO("DEMO", "Rendered demo triangle with axis-aligned vertex colors");
 }
